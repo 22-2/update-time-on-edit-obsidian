@@ -1,12 +1,10 @@
-import { add, format, isAfter, parse } from 'date-fns';
-import { sha256 } from 'js-sha256';
 import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
-import { isTFile } from './utils';
+import { formatDate, getActiveFile, hashString, isExcalidrawFile, isFile, isTFile, normalizeIgnoreFolders, parseDate, shouldUpdateValue } from './utils';
 
 export default class UpdateTimeOnSavePlugin extends Plugin {
   // @ts-expect-error the settings are hot loaded at init
@@ -30,33 +28,6 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     };
   }
 
-  parseDate(input: number | string): Date | undefined {
-    if (typeof input === 'string') {
-      try {
-        const parsedDate = parse(input, this.settings.dateFormat, new Date());
-
-        if (isNaN(parsedDate.getTime())) {
-          this.log('NAN DATE', parsedDate);
-          return undefined;
-        }
-
-        return parsedDate;
-      } catch (e) {
-        console.error(e);
-        return undefined;
-      }
-    }
-    return new Date(input);
-  }
-
-  formatDate(input: Date): string | number {
-    const output = format(input, this.settings.dateFormat);
-    if (/^\d+$/.test(output) && this.settings.enableNumberProperties) {
-      return parseInt(output);
-    }
-    return output;
-  }
-
   async onload() {
     this.log('loading plugin IN DEV');
 
@@ -65,19 +36,6 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     this.setupOnEditHandler();
 
     this.addSettingTab(new UpdateTimeOnEditSettingsTab(this.app, this));
-  }
-
-  // Workaround since the first version of the plugin had a single string for
-  // the option
-  getIgnoreFolders(): string[] {
-    if (typeof this.settings.ignoreGlobalFolder === 'string') {
-      return [this.settings.ignoreGlobalFolder];
-    }
-    return this.settings.ignoreGlobalFolder ?? [];
-  }
-
-  hashString(str: string): string {
-    return sha256(str);
   }
 
   async shouldFileBeIgnored(file: TFile): Promise<boolean> {
@@ -95,8 +53,6 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
 
     const fileContent = (await this.app.vault.read(file)).trim();
 
-    const sha = this.hashString(fileContent);
-
     if (fileContent.length === 0) {
       return true;
     }
@@ -104,7 +60,7 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     if (this.settings.enableExperimentalHash) {
       const maybeHash = this.settings.fileHashMap[file.path];
       if (maybeHash) {
-        const sha = this.hashString(fileContent);
+        const sha = hashString(fileContent);
         if (sha === maybeHash) {
           this.log('Ignoring file because, sha same');
           return true;
@@ -112,13 +68,12 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
       }
     }
 
-    const isExcalidrawFile = this.isExcalidrawFile(file);
-
-    if (isExcalidrawFile) {
+    if (isExcalidrawFile(file)) {
       // TODO: maybe add a setting to enable it if users want to have the keys works there
       return true;
     }
-    const ignores = this.getIgnoreFolders();
+
+    const ignores = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
     if (!ignores) {
       return false;
     }
@@ -133,23 +88,6 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     return (this.settings.ignoreCreatedFolder || []).some((itemIgnore) =>
       path.startsWith(itemIgnore),
     );
-  }
-
-  shouldUpdateValue(currentMtime: Date, updateHeader: Date): boolean {
-    const nextUpdate = add(updateHeader, {
-      minutes: this.settings.minMinutesBetweenSaves,
-    });
-    return isAfter(currentMtime, nextUpdate);
-  }
-
-  isExcalidrawFile(file: TFile): boolean {
-    const ea: any =
-      //@ts-expect-error this is comming from global context, injected by Excalidraw
-      typeof ExcalidrawAutomate === 'undefined'
-        ? undefined
-        : //@ts-expect-error this is comming from global context, injected by Excalidraw
-          ExcalidrawAutomate; //ea will be undefined if the Excalidraw plugin is not running
-    return ea ? ea.isExcalidrawFile(file) : false;
   }
 
   async getAllFilesPossiblyAffected() {
@@ -167,7 +105,7 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
 
   async populateCacheForFile(file: TFile): Promise<void> {
     const fileContent = (await this.app.vault.read(file)).trim();
-    const sha = this.hashString(fileContent);
+    const sha = hashString(fileContent);
     this.settings.fileHashMap[file.path] = sha;
     await this.saveSettings();
   }
@@ -195,8 +133,8 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
           const updatedKey = this.settings.headerUpdated;
           const createdKey = this.settings.headerCreated;
 
-          const mTime = this.parseDate(file.stat.mtime);
-          const cTime = this.parseDate(file.stat.ctime);
+          const mTime = parseDate(file.stat.mtime, this.settings.dateFormat);
+          const cTime = parseDate(file.stat.ctime, this.settings.dateFormat);
 
           if (!mTime || !cTime) {
             this.log('Something wrong happen, skipping');
@@ -205,20 +143,41 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
 
           if (!frontmatter[createdKey]) {
             if (!this.shouldIgnoreCreated(file.path)) {
-              frontmatter[createdKey] = this.formatDate(cTime);
+              frontmatter[createdKey] = formatDate(
+                cTime,
+                this.settings.dateFormat,
+                this.settings.enableNumberProperties,
+              );
             }
           }
 
-          const currentMTimeOnFile = this.parseDate(frontmatter[updatedKey]);
+          const currentMTimeOnFile = parseDate(
+            frontmatter[updatedKey],
+            this.settings.dateFormat,
+          );
 
           if (!frontmatter[updatedKey] || !currentMTimeOnFile) {
             this.log('Update updatedKey');
-            frontmatter[updatedKey] = this.formatDate(mTime);
+            frontmatter[updatedKey] = formatDate(
+              mTime,
+              this.settings.dateFormat,
+              this.settings.enableNumberProperties,
+            );
             return;
           }
 
-          if (this.shouldUpdateValue(mTime, currentMTimeOnFile)) {
-            frontmatter[updatedKey] = this.formatDate(mTime);
+          if (
+            shouldUpdateValue(
+              mTime,
+              currentMTimeOnFile,
+              this.settings.minMinutesBetweenSaves,
+            )
+          ) {
+            frontmatter[updatedKey] = formatDate(
+              mTime,
+              this.settings.dateFormat,
+              this.settings.enableNumberProperties,
+            );
             this.log('Update updatedKey');
             return;
           }
@@ -301,18 +260,4 @@ ${e.message}`;
   async saveSettings() {
     await this.saveData(this.settings);
   }
-}
-
-/**
- * 現在のファイルを取得します
- */
-export function getActiveFile(): TFile | null {
-  return app.workspace.getActiveFile();
-}
-
-/**
- * entryがファイルであるかを判定します
- */
-export function isFile(entry: TAbstractFile): entry is TFile {
-  return 'stat' in entry;
 }
