@@ -157,7 +157,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
 
     // Temporary files created by Obsidian start with "Untitled"
-    if (file.path.startsWith("Untitled")) {
+    if (file.name.startsWith("Untitled")) {
       return true;
     }
 
@@ -213,7 +213,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   public getIgnoreFolders(): string[] {
     return normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
   }
-  
+
   // ==================== File Processing ====================
 
   async getAllFilesPossiblyAffected(): Promise<TFile[]> {
