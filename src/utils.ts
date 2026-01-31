@@ -1,6 +1,6 @@
 import { parse, format, add, isAfter } from 'date-fns';
 import { sha256 } from 'js-sha256';
-import { TAbstractFile, TFile } from 'obsidian';
+import { App, TAbstractFile, TFile } from 'obsidian';
 
 declare global {
   var __DEV_MODE__: boolean;
@@ -16,7 +16,7 @@ export function isTFile(value: TAbstractFile): value is TFile {
 /**
  * 現在のファイルを取得します
  */
-export function getActiveFile(): TFile | null {
+export function getActiveFile(app: App): TFile | null {
   return app.workspace.getActiveFile();
 }
 /**

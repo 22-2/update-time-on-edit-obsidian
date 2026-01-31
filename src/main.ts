@@ -1,4 +1,4 @@
-import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
+import { Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
@@ -9,13 +9,15 @@ import { formatDate, getActiveFile, hashString, isExcalidrawFile, isFile, isTFil
 export default class UpdateTimeOnSavePlugin extends Plugin {
   // @ts-expect-error the settings are hot loaded at init
   settings: UpdateTimeOnEditSettings;
+  // Debounced handler to avoid applying frontmatter while actively editing
+  debouncedModifyHandler?: (file: TFile) => void;
 
   activeMdFileGuard(fn: (file: TFile) => void) {
     return (file: TAbstractFile) => {
       if (!document.hasFocus()) {
         return this.log('not focued');
       }
-      if (getActiveFile()?.path !== file.path) {
+      if (getActiveFile(this.app)?.path !== file.path) {
         return this.log('not active file');
       }
       if (!isFile(file)) {
@@ -208,12 +210,23 @@ ${e.message}`;
   setupOnEditHandler() {
     this.log('Setup handler');
 
+    // Delay applying frontmatter updates while the user is actively editing.
+    // Uses Obsidian's `debounce` utility to wait a short idle period before running.
+    const waitMs = 3000;
+    this.debouncedModifyHandler = debounce((file: TFile) => {
+      this.log('DEBOUNCED TRIGGER');
+      void this.handleFileChange(file, 'modify');
+    }, waitMs);
+
     this.registerEvent(
       this.app.vault.on(
         'modify',
         this.activeMdFileGuard((file) => {
           this.log('TRIGGER FROM MODIFY');
-          return this.handleFileChange(file, 'modify');
+          if (this.debouncedModifyHandler) {
+            this.debouncedModifyHandler(file);
+          }
+          return;
         }),
       ),
     );
