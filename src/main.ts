@@ -156,6 +156,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return true;
     }
 
+    // Temporary files created by Obsidian start with "Untitled"
+    if (file.path.startsWith("Untitled")) {
+      return true;
+    }
+
     return false;
   }
 
