@@ -4,86 +4,198 @@ import {
   UpdateTimeOnEditSettings,
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
-import { formatDate, getActiveFile, hashString, isExcalidrawFile, isFile, isTFile, normalizeIgnoreFolders, parseDate, shouldUpdateValue } from './utils';
+import {
+  formatDate,
+  getActiveFile,
+  hashString,
+  isExcalidrawFile,
+  isFile,
+  isTFile,
+  normalizeIgnoreFolders,
+  parseDate,
+  shouldUpdateValue,
+} from './utils';
 
-export default class UpdateTimeOnSavePlugin extends Plugin {
-  // @ts-expect-error the settings are hot loaded at init
-  settings: UpdateTimeOnEditSettings;
-  // Debounced handler to avoid applying frontmatter while actively editing
-  debouncedModifyHandler?: (file: TFile) => void;
+interface FileChangeResult {
+  status: 'ok' | 'error' | 'ignored';
+  error?: any;
+}
 
-  activeMdFileGuard(fn: (file: TFile) => void) {
-    return (file: TAbstractFile) => {
-      if (!document.hasFocus()) {
-        return this.log('not focued');
-      }
-      if (getActiveFile(this.app)?.path !== file.path) {
-        return this.log('not active file');
-      }
-      if (!isFile(file)) {
-        return this.log('not a file');
-      }
-      if (file.extension !== 'md') {
-        return this.log('not a md file');
-      }
-      fn(file);
-    };
-  }
+export default class UpdateTimeOnEditPlugin extends Plugin {
+  settings!: UpdateTimeOnEditSettings;
+  private debouncedModifyHandler?: (file: TFile) => void;
+  private readonly DEBOUNCE_DELAY_MS = 3000;
 
-  async onload() {
+  async onload(): Promise<void> {
     this.log('loading plugin IN DEV');
 
     await this.loadSettings();
-
-    this.setupOnEditHandler();
-
+    this.setupEventHandlers();
     this.addSettingTab(new UpdateTimeOnEditSettingsTab(this.app, this));
   }
 
-  async shouldFileBeIgnored(file: TFile): Promise<boolean> {
-    if (!file.path) {
-      return true;
-    }
-    if (file.extension != 'md') {
-      return true;
-    }
-    // Canvas files are created as 'Canvas.md',
-    // so the plugin will update "frontmatter" and break the file when it gets created
-    if (file.name == 'Canvas.md') {
-      return true;
-    }
+  onunload(): void {
+    this.log('unloading Update time on edit plugin');
+  }
 
-    const fileContent = (await this.app.vault.read(file)).trim();
+  // ==================== Settings ====================
 
-    if (fileContent.length === 0) {
-      return true;
-    }
+  async loadSettings(): Promise<void> {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
 
-    if (this.settings.enableExperimentalHash) {
-      const maybeHash = this.settings.fileHashMap[file.path];
-      if (maybeHash) {
-        const sha = hashString(fileContent);
-        if (sha === maybeHash) {
-          this.log('Ignoring file because, sha same');
-          return true;
-        }
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+
+  // ==================== Event Handlers ====================
+
+  private setupEventHandlers(): void {
+    this.log('Setup handler');
+    this.setupModifyHandler();
+    this.setupRenameHandler();
+    this.setupDeleteHandler();
+  }
+
+  private setupModifyHandler(): void {
+    this.debouncedModifyHandler = debounce((file: TFile) => {
+      this.log('DEBOUNCED TRIGGER');
+      void this.handleFileChange(file, 'modify');
+    }, this.DEBOUNCE_DELAY_MS);
+
+    this.registerEvent(
+      this.app.vault.on('modify', this.createActiveFileGuard((file) => {
+        this.log('TRIGGER FROM MODIFY');
+        this.debouncedModifyHandler?.(file);
+      })),
+    );
+  }
+
+  private setupRenameHandler(): void {
+    this.registerEvent(
+      this.app.vault.on('rename', (file, oldPath) => {
+        this.handleFileRename(file, oldPath);
+      }),
+    );
+  }
+
+  private setupDeleteHandler(): void {
+    this.registerEvent(
+      this.app.vault.on('delete', async (file) => {
+        await this.handleFileDelete(file);
+      }),
+    );
+  }
+
+  // ==================== File Guards ====================
+
+  private createActiveFileGuard(fn: (file: TFile) => void) {
+    return (file: TAbstractFile) => {
+      if (!this.isValidActiveFile(file)) {
+        return;
       }
+      fn(file as TFile);
+    };
+  }
+
+  private isValidActiveFile(file: TAbstractFile): boolean {
+    if (!document.hasFocus()) {
+      this.log('not focused');
+      return false;
+    }
+
+    if (getActiveFile(this.app)?.path !== file.path) {
+      this.log('not active file');
+      return false;
+    }
+
+    if (!isFile(file)) {
+      this.log('not a file');
+      return false;
+    }
+
+    if (file.extension !== 'md') {
+      this.log('not a md file');
+      return false;
+    }
+
+    return true;
+  }
+
+  // ==================== File Filtering ====================
+
+  async shouldFileBeIgnored(file: TFile): Promise<boolean> {
+    if (this.isInvalidFile(file)) {
+      return true;
+    }
+
+    const fileContent = await this.getFileContent(file);
+    if (!fileContent) {
+      return true;
+    }
+
+    if (await this.isFileUnchanged(file, fileContent)) {
+      return true;
     }
 
     if (isExcalidrawFile(file)) {
-      // TODO: maybe add a setting to enable it if users want to have the keys works there
       return true;
     }
 
+    return this.isFileInIgnoredFolder(file);
+  }
+
+  private isInvalidFile(file: TFile): boolean {
+    if (!file.path || file.extension !== 'md') {
+      return true;
+    }
+
+    // Canvas files are created as 'Canvas.md',
+    // so the plugin will update "frontmatter" and break the file when it gets created
+    if (file.name === 'Canvas.md') {
+      return true;
+    }
+
+    return false;
+  }
+
+  private async getFileContent(file: TFile): Promise<string | null> {
+    try {
+      const content = (await this.app.vault.read(file)).trim();
+      return content.length === 0 ? null : content;
+    } catch {
+      return null;
+    }
+  }
+
+  private async isFileUnchanged(file: TFile, fileContent: string): Promise<boolean> {
+    if (!this.settings.enableExperimentalHash) {
+      return false;
+    }
+
+    const cachedHash = this.settings.fileHashMap[file.path];
+    if (!cachedHash) {
+      return false;
+    }
+
+    const currentHash = hashString(fileContent);
+    if (currentHash === cachedHash) {
+      this.log('Ignoring file because, sha same');
+      return true;
+    }
+
+    return false;
+  }
+
+  private isFileInIgnoredFolder(file: TFile): boolean {
     const ignores = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
     if (!ignores) {
       return false;
     }
-
     return ignores.some((ignoreItem) => file.path.startsWith(ignoreItem));
   }
 
-  shouldIgnoreCreated(path: string): boolean {
+  private shouldIgnoreCreated(path: string): boolean {
     if (!this.settings.enableCreateTime) {
       return true;
     }
@@ -92,9 +204,11 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     );
   }
 
-  async getAllFilesPossiblyAffected() {
+  // ==================== File Processing ====================
+
+  async getAllFilesPossiblyAffected(): Promise<TFile[]> {
     const allFiles = this.app.vault.getMarkdownFiles();
-    const result = [];
+    const result: TFile[] = [];
 
     for (const file of allFiles) {
       if (!(await this.shouldFileBeIgnored(file))) {
@@ -105,19 +219,10 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     return result;
   }
 
-  async populateCacheForFile(file: TFile): Promise<void> {
-    const fileContent = (await this.app.vault.read(file)).trim();
-    const sha = hashString(fileContent);
-    this.settings.fileHashMap[file.path] = sha;
-    await this.saveSettings();
-  }
-
   async handleFileChange(
     file: TAbstractFile,
     triggerSource: 'modify' | 'bulk',
-  ): Promise<
-    { status: 'ok' } | { status: 'error'; error: any } | { status: 'ignored' }
-  > {
+  ): Promise<FileChangeResult> {
     if (!isTFile(file)) {
       return { status: 'ignored' };
     }
@@ -127,150 +232,147 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     }
 
     try {
-      await this.app.fileManager.processFrontMatter(
-        file,
-        (frontmatter) => {
-          this.log('current metadata: ', frontmatter);
-          this.log('current stat: ', file.stat);
-          const updatedKey = this.settings.headerUpdated;
-          const createdKey = this.settings.headerCreated;
-
-          const mTime = parseDate(file.stat.mtime, this.settings.dateFormat);
-          const cTime = parseDate(file.stat.ctime, this.settings.dateFormat);
-
-          if (!mTime || !cTime) {
-            this.log('Something wrong happen, skipping');
-            return;
-          }
-
-          if (!frontmatter[createdKey]) {
-            if (!this.shouldIgnoreCreated(file.path)) {
-              frontmatter[createdKey] = formatDate(
-                cTime,
-                this.settings.dateFormat,
-                this.settings.enableNumberProperties,
-              );
-            }
-          }
-
-          const currentMTimeOnFile = parseDate(
-            frontmatter[updatedKey],
-            this.settings.dateFormat,
-          );
-
-          if (!frontmatter[updatedKey] || !currentMTimeOnFile) {
-            this.log('Update updatedKey');
-            frontmatter[updatedKey] = formatDate(
-              mTime,
-              this.settings.dateFormat,
-              this.settings.enableNumberProperties,
-            );
-            return;
-          }
-
-          if (
-            shouldUpdateValue(
-              mTime,
-              currentMTimeOnFile,
-              this.settings.minMinutesBetweenSaves,
-            )
-          ) {
-            frontmatter[updatedKey] = formatDate(
-              mTime,
-              this.settings.dateFormat,
-              this.settings.enableNumberProperties,
-            );
-            this.log('Update updatedKey');
-            return;
-          }
-          this.log('Skipping updateKey');
-        },
-        { ctime: file.stat.ctime, mtime: file.stat.mtime },
-      );
+      await this.updateFileFrontmatter(file);
       await this.populateCacheForFile(file);
+      return { status: 'ok' };
     } catch (e: any) {
-      if (e?.name === 'YAMLParseError') {
-        const errorMessage = `Update time on edit failed
-Malformed frontamtter on this file : ${file.path}
-
-${e.message}`;
-        new Notice(errorMessage, 4000);
-        console.error(errorMessage);
-        return {
-          status: 'error',
-          error: e,
-        };
-      }
+      return this.handleProcessingError(e, file);
     }
+  }
+
+  private async updateFileFrontmatter(file: TFile): Promise<void> {
+    await this.app.fileManager.processFrontMatter(
+      file,
+      (frontmatter) => {
+        this.updateFrontmatterFields(frontmatter, file);
+      },
+      { ctime: file.stat.ctime, mtime: file.stat.mtime },
+    );
+  }
+
+  private updateFrontmatterFields(frontmatter: any, file: TFile): void {
+    this.log('current metadata: ', frontmatter);
+    this.log('current stat: ', file.stat);
+
+    const { mTime, cTime } = this.parseFileTimes(file);
+    if (!mTime || !cTime) {
+      this.log('Something wrong happen, skipping');
+      return;
+    }
+
+    this.updateCreatedField(frontmatter, file.path, cTime);
+    this.updateModifiedField(frontmatter, mTime);
+  }
+
+  private parseFileTimes(file: TFile) {
     return {
-      status: 'ok',
+      mTime: parseDate(file.stat.mtime, this.settings.dateFormat),
+      cTime: parseDate(file.stat.ctime, this.settings.dateFormat),
     };
   }
 
-  setupOnEditHandler() {
-    this.log('Setup handler');
+  private updateCreatedField(frontmatter: any, filePath: string, cTime: Date): void {
+    const createdKey = this.settings.headerCreated;
 
-    // Delay applying frontmatter updates while the user is actively editing.
-    // Uses Obsidian's `debounce` utility to wait a short idle period before running.
-    const waitMs = 3000;
-    this.debouncedModifyHandler = debounce((file: TFile) => {
-      this.log('DEBOUNCED TRIGGER');
-      void this.handleFileChange(file, 'modify');
-    }, waitMs);
+    if (!frontmatter[createdKey] && !this.shouldIgnoreCreated(filePath)) {
+      frontmatter[createdKey] = formatDate(
+        cTime,
+        this.settings.dateFormat,
+        this.settings.enableNumberProperties,
+      );
+    }
+  }
 
-    this.registerEvent(
-      this.app.vault.on(
-        'modify',
-        this.activeMdFileGuard((file) => {
-          this.log('TRIGGER FROM MODIFY');
-          if (this.debouncedModifyHandler) {
-            this.debouncedModifyHandler(file);
-          }
-          return;
-        }),
-      ),
+  private updateModifiedField(frontmatter: any, mTime: Date): void {
+    const updatedKey = this.settings.headerUpdated;
+    const currentMTimeOnFile = parseDate(
+      frontmatter[updatedKey],
+      this.settings.dateFormat,
     );
 
-    this.registerEvent(
-      this.app.vault.on('rename', (file, oldPath) => {
-        const hash = this.settings.fileHashMap[oldPath];
-        if (!hash) {
-          return;
-        }
-        this.settings.fileHashMap[file.path] = hash;
-        delete this.settings.fileHashMap[oldPath];
-        this.saveSettings();
-      }),
-    );
+    if (!frontmatter[updatedKey] || !currentMTimeOnFile) {
+      this.log('Update updatedKey');
+      frontmatter[updatedKey] = formatDate(
+        mTime,
+        this.settings.dateFormat,
+        this.settings.enableNumberProperties,
+      );
+      return;
+    }
 
-    this.registerEvent(
-      this.app.vault.on('delete', async (file) => {
-        const sha = this.settings.fileHashMap[file.path];
-        if (!sha) {
-          return;
-        }
-        delete this.settings.fileHashMap[file.path];
-        this.saveSettings();
-      }),
+    if (this.shouldUpdateModifiedTime(mTime, currentMTimeOnFile)) {
+      frontmatter[updatedKey] = formatDate(
+        mTime,
+        this.settings.dateFormat,
+        this.settings.enableNumberProperties,
+      );
+      this.log('Update updatedKey');
+      return;
+    }
+
+    this.log('Skipping updateKey');
+  }
+
+  private shouldUpdateModifiedTime(mTime: Date, currentMTime: Date): boolean {
+    return shouldUpdateValue(
+      mTime,
+      currentMTime,
+      this.settings.minMinutesBetweenSaves,
     );
   }
 
-  onunload() {
-    this.log('unloading Update time on edit plugin');
+  private handleProcessingError(error: any, file: TFile): FileChangeResult {
+    if (error?.name === 'YAMLParseError') {
+      const errorMessage = `Update time on edit failed
+Malformed frontmatter on this file: ${file.path}
+
+${error.message}`;
+      new Notice(errorMessage, 4000);
+      console.error(errorMessage);
+    }
+    return { status: 'error', error };
   }
 
-  log(...data: any[]) {
+  // ==================== Cache Management ====================
+
+  async populateCacheForFile(file: TFile): Promise<void> {
+    const fileContent = await this.getFileContent(file);
+    if (!fileContent) {
+      return;
+    }
+
+    const sha = hashString(fileContent);
+    this.settings.fileHashMap[file.path] = sha;
+    await this.saveSettings();
+  }
+
+  private handleFileRename(file: TAbstractFile, oldPath: string): void {
+    const hash = this.settings.fileHashMap[oldPath];
+    if (!hash) {
+      return;
+    }
+
+    this.settings.fileHashMap[file.path] = hash;
+    delete this.settings.fileHashMap[oldPath];
+    void this.saveSettings();
+  }
+
+  private async handleFileDelete(file: TAbstractFile): Promise<void> {
+    const sha = this.settings.fileHashMap[file.path];
+    if (!sha) {
+      return;
+    }
+
+    delete this.settings.fileHashMap[file.path];
+    await this.saveSettings();
+  }
+
+  // ==================== Utilities ====================
+
+  private log(...data: any[]): void {
     if (!__DEV_MODE__) {
       return;
     }
     console.log('[UTOE]:', ...data);
-  }
-
-  async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-  }
-
-  async saveSettings() {
-    await this.saveData(this.settings);
   }
 }
