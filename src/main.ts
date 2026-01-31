@@ -209,6 +209,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     );
   }
 
+  // Returns normalized list of folders to ignore (handles legacy string setting)
+  public getIgnoreFolders(): string[] {
+    return normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
+  }
+  
   // ==================== File Processing ====================
 
   async getAllFilesPossiblyAffected(): Promise<TFile[]> {

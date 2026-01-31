@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
   minMinutesBetweenSaves: 1,
   ignoreGlobalFolder: [],
   ignoreCreatedFolder: [],
-  enableExperimentalHash: false,
+  enableExperimentalHash: true,
   fileHashMap: {},
 };
 
@@ -84,7 +84,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
       )
       .addToggle((cb) =>
         cb
-          .setValue(this.plugin.settings.enableExperimentalHash ?? false)
+          .setValue(this.plugin.settings.enableExperimentalHash ?? true)
           .onChange(async (newValue) => {
             this.plugin.settings.enableExperimentalHash = newValue;
             await this.saveSettings();
