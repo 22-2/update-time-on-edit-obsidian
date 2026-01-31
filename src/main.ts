@@ -1,19 +1,34 @@
+import { add, format, isAfter, parse } from 'date-fns';
+import { sha256 } from 'js-sha256';
 import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
-import format from 'date-fns/format';
-import parse from 'date-fns/parse';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
 import { isTFile } from './utils';
-import add from 'date-fns/add';
-import isAfter from 'date-fns/isAfter';
-import { sha256 } from 'js-sha256';
 
 export default class UpdateTimeOnSavePlugin extends Plugin {
   // @ts-expect-error the settings are hot loaded at init
   settings: UpdateTimeOnEditSettings;
+
+  activeMdFileGuard(fn: (file: TFile) => void) {
+    return (file: TAbstractFile) => {
+      if (!document.hasFocus()) {
+        return this.log('not focued');
+      }
+      if (getActiveFile()?.path !== file.path) {
+        return this.log('not active file');
+      }
+      if (!isFile(file)) {
+        return this.log('not a file');
+      }
+      if (file.extension !== 'md') {
+        return this.log('not a md file');
+      }
+      fn(file);
+    };
+  }
 
   parseDate(input: number | string): Date | undefined {
     if (typeof input === 'string') {
@@ -74,8 +89,7 @@ export default class UpdateTimeOnSavePlugin extends Plugin {
     }
     // Canvas files are created as 'Canvas.md',
     // so the plugin will update "frontmatter" and break the file when it gets created
-    if(file.name == 'Canvas.md')
-    {
+    if (file.name == 'Canvas.md') {
       return true;
     }
 
@@ -236,10 +250,13 @@ ${e.message}`;
     this.log('Setup handler');
 
     this.registerEvent(
-      this.app.vault.on('modify', (file) => {
-        this.log('TRIGGER FROM MODIFY');
-        return this.handleFileChange(file, 'modify');
-      }),
+      this.app.vault.on(
+        'modify',
+        this.activeMdFileGuard((file) => {
+          this.log('TRIGGER FROM MODIFY');
+          return this.handleFileChange(file, 'modify');
+        }),
+      ),
     );
 
     this.registerEvent(
@@ -284,4 +301,18 @@ ${e.message}`;
   async saveSettings() {
     await this.saveData(this.settings);
   }
+}
+
+/**
+ * 現在のファイルを取得します
+ */
+export function getActiveFile(): TFile | null {
+  return app.workspace.getActiveFile();
+}
+
+/**
+ * entryがファイルであるかを判定します
+ */
+export function isFile(entry: TAbstractFile): entry is TFile {
+  return 'stat' in entry;
 }
