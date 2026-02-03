@@ -1,4 +1,4 @@
-import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
+import { Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
@@ -16,6 +16,7 @@ import {
   parseDate,
   shouldUpdateValue,
 } from './utils';
+import { FileWriteQueue } from './FileWriteQueue';
 
 interface FileChangeResult {
   status: 'ok' | 'error' | 'ignored';
@@ -28,17 +29,29 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private readonly EDIT_IDLE_DELAY_MS = 1500;
   private readonly pendingUpdateTimers = new Map<string, number>();
   private readonly lastEditorChangeAt = new Map<string, number>();
+  private settingsWriteQueue!: FileWriteQueue;
+  private debouncedSaveSettings!: () => void;
 
   async onload(): Promise<void> {
     this.log('loading plugin IN DEV');
 
     await this.loadSettings();
+    this.settingsWriteQueue = new FileWriteQueue();
+    
+    // Obsidian の debounce を使用して、高頻度な設定保存を制御
+    this.debouncedSaveSettings = debounce(
+      async () => await this.saveSettings(),
+      1000,
+      true,
+    );
+
     this.setupEventHandlers();
     this.addSettingTab(new UpdateTimeOnEditSettingsTab(this.app, this));
   }
 
-  onunload(): void {
+  async onunload(): Promise<void> {
     this.log('unloading Update time on edit plugin');
+    await this.settingsWriteQueue.flushAndWait();
   }
 
   // ==================== Settings ====================
@@ -49,6 +62,15 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  /**
+   * 設定をバッチ保存（デバウンス済み）
+   * 高頻度な保存リクエストを1秒でまとめて1回の実際の保存にする
+   * data.json の FileLocked 問題を軽減
+   */
+  saveSettingsBatched(): void {
+    this.debouncedSaveSettings();
   }
 
   // ==================== Event Handlers ====================
@@ -400,7 +422,7 @@ ${error.message}`;
 
     const sha = hashString(fileContent);
     this.settings.fileHashMap[file.path] = sha;
-    await this.saveSettings();
+    this.saveSettingsBatched();
   }
 
   private handleFileRename(file: TAbstractFile, oldPath: string): void {
@@ -411,7 +433,7 @@ ${error.message}`;
 
     this.settings.fileHashMap[file.path] = hash;
     delete this.settings.fileHashMap[oldPath];
-    void this.saveSettings();
+    this.saveSettingsBatched();
   }
 
   private async handleFileDelete(file: TAbstractFile): Promise<void> {
@@ -421,7 +443,7 @@ ${error.message}`;
     }
 
     delete this.settings.fileHashMap[file.path];
-    await this.saveSettings();
+    this.saveSettingsBatched();
   }
 
   // ==================== Utilities ====================
