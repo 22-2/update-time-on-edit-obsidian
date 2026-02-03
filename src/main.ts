@@ -1,4 +1,5 @@
-import { Notice, Plugin, TAbstractFile, TFile, debounce, getFrontMatterInfo } from 'obsidian';
+import { Editor, Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
+import { FileWriteQueue } from './FileWriteQueue';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
@@ -10,13 +11,12 @@ import {
   hashString,
   isExcalidrawFile,
   isFile,
-  isTFile,
   isPathIgnored,
+  isTFile,
   normalizeIgnoreFolders,
   parseDate,
   shouldUpdateValue,
 } from './utils';
-import { FileWriteQueue } from './FileWriteQueue';
 
 interface FileChangeResult {
   status: 'ok' | 'error' | 'ignored';
@@ -351,10 +351,10 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return false;
     }
     const cursorPos = editor.getCursor();
-    const { contentStart: contentStartLine } = getFrontMatterInfo(editor.getDoc().getValue());
+    const cursorAfterFrontmatter = this.getCursorAfterFrontmatter(editor);
     
     // Skip update if cursor is before contentStart (i.e., in frontmatter)
-    if (cursorPos.line < contentStartLine) {
+    if (cursorAfterFrontmatter && cursorPos.line < cursorAfterFrontmatter.line) {
       this.log('Skipping frontmatter update because cursor is in frontmatter area');
       return true;
     }
@@ -362,7 +362,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     return false;
   }
 
-  private getCursorAfterFrontmatter(editor: any): { line: number; ch: number } | null {
+  private getCursorAfterFrontmatter(editor: Editor): { line: number; ch: number } | null {
     const content = editor.getValue();
     const lines = content.split('\n');
     
