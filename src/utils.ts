@@ -1,4 +1,4 @@
-import { parse, format, add, isAfter } from 'date-fns';
+declare const moment: any;
 import ignore from 'ignore';
 import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
@@ -39,13 +39,14 @@ export function hashString(str: string): string {
 export function parseDate(input: number | string, dateFormat: string): Date | undefined {
   if (typeof input === 'string') {
     try {
-      const parsedDate = parse(input, dateFormat, new Date());
-
-      if (isNaN(parsedDate.getTime())) {
+      let m = moment(input, dateFormat, true);
+      if (!m.isValid()) {
+        m = moment(input);
+      }
+      if (!m.isValid()) {
         return undefined;
       }
-
-      return parsedDate;
+      return m.toDate();
     } catch (e) {
       console.error(e);
       return undefined;
@@ -57,7 +58,7 @@ export function parseDate(input: number | string, dateFormat: string): Date | un
  * 日付をフォーマットします
  */
 export function formatDate(input: Date, dateFormat: string): string {
-  return format(input, dateFormat);
+  return moment(input).format(dateFormat);
 }
 /**
  * 更新すべきかどうかを判定します
@@ -66,10 +67,8 @@ export function shouldUpdateValue(
   currentMtime: Date,
   updateHeader: Date,
   minMinutesBetweenSaves: number): boolean {
-  const nextUpdate = add(updateHeader, {
-    minutes: minMinutesBetweenSaves,
-  });
-  return isAfter(currentMtime, nextUpdate);
+  const nextUpdate = moment(updateHeader).add(minMinutesBetweenSaves, 'minutes').toDate();
+  return moment(currentMtime).isAfter(nextUpdate);
 }
 /**
  * Excalidrawファイルかどうかを判定します

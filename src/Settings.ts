@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import UpdateTimeOnSavePlugin from './main';
-import { format } from 'date-fns';
+declare const moment: any;
 import { UpdateAllModal } from './UpdateAllModal';
 import { UpdateAllCacheData } from './UpdateAllCacheData';
 import { IgnoreRulesModal } from './IgnoreRulesModal';
@@ -21,7 +21,7 @@ export interface UpdateTimeOnEditSettings {
 }
 
 export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
-  dateFormat: "yyyy-MM-dd'T'HH:mm",
+  dateFormat: "YYYY-MM-DDTHH:mm",
   enableCreateTime: true,
   headerUpdated: 'updated',
   headerCreated: 'created',
@@ -121,13 +121,13 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
         descr.createEl('br'),
         'Check ',
         descr.createEl('a', {
-          href: 'https://date-fns.org/v2.25.0/docs/format',
-          text: 'date-fns documentation',
+          href: 'https://momentjs.com/docs/#/displaying/format/',
+          text: 'moment documentation',
         }),
         descr.createEl('br'),
-        `Currently: ${format(new Date(), getValue())}`,
+        `Currently: ${moment().format(getValue())}`,
         descr.createEl('br'),
-        `Obsidian default format for date properties: yyyy-MM-dd'T'HH:mm`,
+        `Obsidian default format for date properties: YYYY-MM-DDTHH:mm`,
       );
       return descr;
     };
