@@ -1,4 +1,4 @@
-import { Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
+import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
@@ -23,8 +23,10 @@ interface FileChangeResult {
 
 export default class UpdateTimeOnEditPlugin extends Plugin {
   settings!: UpdateTimeOnEditSettings;
-  private debouncedModifyHandler?: (file: TFile) => void;
   private readonly DEBOUNCE_DELAY_MS = 3000;
+  private readonly EDIT_IDLE_DELAY_MS = 1500;
+  private readonly pendingUpdateTimers = new Map<string, number>();
+  private readonly lastEditorChangeAt = new Map<string, number>();
 
   async onload(): Promise<void> {
     this.log('loading plugin IN DEV');
@@ -53,21 +55,35 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupEventHandlers(): void {
     this.log('Setup handler');
     this.setupModifyHandler();
+    this.setupEditorChangeHandler();
     this.setupRenameHandler();
     this.setupDeleteHandler();
   }
 
   private setupModifyHandler(): void {
-    this.debouncedModifyHandler = debounce((file: TFile) => {
-      this.log('DEBOUNCED TRIGGER');
-      void this.handleFileChange(file, 'modify');
-    }, this.DEBOUNCE_DELAY_MS);
-
     this.registerEvent(
       this.app.vault.on('modify', this.createActiveFileGuard((file) => {
         this.log('TRIGGER FROM MODIFY');
-        this.debouncedModifyHandler?.(file);
+        this.scheduleIdleUpdate(file, 'modify');
       })),
+    );
+  }
+
+  private setupEditorChangeHandler(): void {
+    this.registerEvent(
+      this.app.workspace.on('editor-change', (_editor, view) => {
+        const file = view?.file;
+        if (!file || file.extension !== 'md') {
+          return;
+        }
+
+        this.lastEditorChangeAt.set(file.path, Date.now());
+
+        if (this.pendingUpdateTimers.has(file.path)) {
+          this.log('RESCHEDULE BECAUSE EDITING');
+          this.scheduleIdleUpdate(file, 'modify');
+        }
+      }),
     );
   }
 
@@ -120,6 +136,43 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
 
     return true;
+  }
+
+  private isFileBeingEdited(filePath: string): boolean {
+    const lastEditAt = this.lastEditorChangeAt.get(filePath);
+    if (!lastEditAt) {
+      return false;
+    }
+    return Date.now() - lastEditAt < this.EDIT_IDLE_DELAY_MS;
+  }
+
+  private clearPendingUpdate(filePath: string): void {
+    const timerId = this.pendingUpdateTimers.get(filePath);
+    if (timerId) {
+      window.clearTimeout(timerId);
+      this.pendingUpdateTimers.delete(filePath);
+    }
+  }
+
+  private scheduleIdleUpdate(
+    file: TFile,
+    triggerSource: 'modify' | 'bulk',
+  ): void {
+    this.clearPendingUpdate(file.path);
+
+    const timerId = window.setTimeout(() => {
+      this.pendingUpdateTimers.delete(file.path);
+
+      if (this.isFileBeingEdited(file.path)) {
+        this.log('EDITING IN PROGRESS, DELAYING UPDATE');
+        this.scheduleIdleUpdate(file, triggerSource);
+        return;
+      }
+
+      void this.handleFileChange(file, triggerSource);
+    }, this.DEBOUNCE_DELAY_MS);
+
+    this.pendingUpdateTimers.set(file.path, timerId);
   }
 
   // ==================== File Filtering ====================
