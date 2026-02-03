@@ -1,4 +1,5 @@
 import { parse, format, add, isAfter } from 'date-fns';
+import ignore from 'ignore';
 import { sha256 } from 'js-sha256';
 import { App, TAbstractFile, TFile } from 'obsidian';
 
@@ -89,8 +90,62 @@ export function isExcalidrawFile(file: TFile): boolean {
  * 無視フォルダー設定を正規化します
  */
 export function normalizeIgnoreFolders(ignoreGlobalFolder: string | string[] | undefined): string[] {
-  if (typeof ignoreGlobalFolder === 'string') {
-    return [ignoreGlobalFolder];
+  if (!ignoreGlobalFolder) {
+    return [];
   }
-  return ignoreGlobalFolder ?? [];
+
+  const rawList = Array.isArray(ignoreGlobalFolder)
+    ? ignoreGlobalFolder
+    : ignoreGlobalFolder.split(/\r?\n/);
+
+  return rawList
+    .map((item) => toPosixPath(item).trim())
+    .filter((item) => item.length > 0 && !item.startsWith('#'))
+    .filter(onlyUniqueArray);
+}
+
+/**
+ * WindowsパスをPOSIX形式に変換します
+ */
+export function toPosixPath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+/**
+ * ignoreパッケージによるgitignore風の除外判定を行います
+ */
+export function isPathIgnored(path: string, patterns: string[]): boolean {
+  if (!patterns.length) {
+    return false;
+  }
+
+  const matcher = ignore({ allowRelativePaths: true });
+  matcher.add(patterns);
+
+  const normalizedPath = toPosixPath(path).replace(/^\/+/, '');
+  return matcher.ignores(normalizedPath);
+}
+
+/**
+ * フォルダ一覧から、除外対象のフォルダだけを抽出します
+ */
+export function filterIgnoredFolders(
+  folders: string[],
+  patterns: string | string[] | undefined,
+): string[] {
+  const normalizedPatterns = normalizeIgnoreFolders(patterns);
+  if (!normalizedPatterns.length) {
+    return [];
+  }
+
+  const matcher = ignore({ allowRelativePaths: true });
+  matcher.add(normalizedPatterns);
+
+  return folders
+    .map((folder) => toPosixPath(folder).replace(/\/+$/, ''))
+    .filter((folder) => {
+      const matchPath = folder ? `${folder}/` : '';
+      const normalizedPath = matchPath.replace(/^\/+/, '');
+      return matcher.ignores(normalizedPath);
+    });
 }

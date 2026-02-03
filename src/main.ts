@@ -11,6 +11,7 @@ import {
   isExcalidrawFile,
   isFile,
   isTFile,
+  isPathIgnored,
   normalizeIgnoreFolders,
   parseDate,
   shouldUpdateValue,
@@ -246,20 +247,16 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private isFileInIgnoredFolder(file: TFile): boolean {
-    const ignores = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
-    if (!ignores) {
-      return false;
-    }
-    return ignores.some((ignoreItem) => file.path.startsWith(ignoreItem));
+    const ignorePatterns = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
+    return isPathIgnored(file.path, ignorePatterns);
   }
 
   private shouldIgnoreCreated(path: string): boolean {
     if (!this.settings.enableCreateTime) {
       return true;
     }
-    return (this.settings.ignoreCreatedFolder || []).some((itemIgnore) =>
-      path.startsWith(itemIgnore),
-    );
+    const ignorePatterns = normalizeIgnoreFolders(this.settings.ignoreCreatedFolder);
+    return isPathIgnored(path, ignorePatterns);
   }
 
   // Returns normalized list of folders to ignore (handles legacy string setting)

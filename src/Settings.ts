@@ -1,10 +1,10 @@
-import { App, PluginSettingTab, SearchComponent, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting } from 'obsidian';
 import UpdateTimeOnSavePlugin from './main';
-import { FolderSuggest } from './suggesters/FolderSuggester';
-import { onlyUniqueArray } from './utils';
 import { format } from 'date-fns';
 import { UpdateAllModal } from './UpdateAllModal';
 import { UpdateAllCacheData } from './UpdateAllCacheData';
+import { IgnoreRulesModal } from './IgnoreRulesModal';
+import { normalizeIgnoreFolders } from './utils';
 
 export interface UpdateTimeOnEditSettings {
   dateFormat: string;
@@ -15,7 +15,7 @@ export interface UpdateTimeOnEditSettings {
   minMinutesBetweenSaves: number;
   // Union because of legacy
   ignoreGlobalFolder?: string | string[];
-  ignoreCreatedFolder?: string[];
+  ignoreCreatedFolder?: string | string[];
 
   enableExperimentalHash?: boolean;
   fileHashMap: Record<string, string>;
@@ -52,18 +52,18 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     this.addExcludedFoldersSetting();
     this.addTimeBetweenUpdates();
     this.addDateFormat();
-    this.addEnableNumberProperties();
+    // this.addEnableNumberProperties();
 
-    new Setting(this.containerEl)
-      .setName('Update all files')
-      .setDesc(
-        'This plugin will only work on new files, but if you want to update all files in your vault at once, you can do it here.',
-      )
-      .addButton((cb) => {
-        cb.setButtonText('Update all files').onClick(() => {
-          new UpdateAllModal(this.app, this.plugin).open();
-        });
-      });
+    // new Setting(this.containerEl)
+    //   .setName('Update all files')
+    //   .setDesc(
+    //     'This plugin will only work on new files, but if you want to update all files in your vault at once, you can do it here.',
+    //   )
+    //   .addButton((cb) => {
+    //     cb.setButtonText('Update all files').onClick(() => {
+    //       new UpdateAllModal(this.app, this.plugin).open();
+    //     });
+    //   });
 
     containerEl.createEl('h2', { text: 'Updated at' });
 
@@ -232,72 +232,70 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     if (!this.plugin.settings.enableCreateTime) {
       return;
     }
+    const patterns = normalizeIgnoreFolders(this.plugin.settings.ignoreCreatedFolder);
 
-    this.doSearchAndRemoveList({
-      currentList: this.plugin.settings.ignoreCreatedFolder ?? [],
-      setValue: async (newValue) => {
-        this.plugin.settings.ignoreCreatedFolder = newValue;
-      },
-      name: 'Folder(s) to exclude for updating the created property',
-      description:
-        'Any file updated in this folder will not trigger a created update.',
-    });
+    const setting = new Setting(this.containerEl)
+      .setName('Exclude rules for created property')
+      .setDesc(
+        'Files matching these gitignore-style patterns will skip created front matter updates.',
+      )
+      .addButton((btn) =>
+        btn.setButtonText('Edit rules').onClick(() => {
+          new IgnoreRulesModal(this.app, this.plugin, {
+            title: 'Edit created exclusion rules',
+            description:
+              'One pattern per line. Use !pattern to re-include and # for comments.',
+            initialPatterns: this.plugin.settings.ignoreCreatedFolder ?? [],
+            onSave: async (newValue) => {
+              this.plugin.settings.ignoreCreatedFolder = newValue;
+              await this.saveSettings();
+              this.display();
+            },
+          }).open();
+        }),
+      );
+
+    this.renderPatternsSummary(patterns, setting.settingEl);
   }
 
   addExcludedFoldersSetting(): void {
-    this.doSearchAndRemoveList({
-      currentList: this.plugin.getIgnoreFolders(),
-      setValue: async (newValue) => {
-        this.plugin.settings.ignoreGlobalFolder = newValue;
-      },
-      name: 'Folder to exclude of all updates',
-      description:
-        'Any file updated in this folder will not trigger an updated and created update.',
-    });
+    const patterns = this.plugin.getIgnoreFolders();
+
+    const setting = new Setting(this.containerEl)
+      .setName('Exclude rules for all updates')
+      .setDesc(
+        'Gitignore-style patterns. Matching files are ignored for both updated and created timestamps.',
+      )
+      .addButton((btn) =>
+        btn.setButtonText('Edit rules').onClick(() => {
+          new IgnoreRulesModal(this.app, this.plugin, {
+            title: 'Edit exclusion rules',
+            description:
+              'One pattern per line. Use !pattern to re-include and # for comments.',
+            initialPatterns: this.plugin.settings.ignoreGlobalFolder ?? [],
+            onSave: async (newValue) => {
+              this.plugin.settings.ignoreGlobalFolder = newValue;
+              await this.saveSettings();
+              this.display();
+            },
+          }).open();
+        }),
+      );
+
+    this.renderPatternsSummary(patterns, setting.settingEl);
   }
 
-  doSearchAndRemoveList({
-    currentList,
-    setValue,
-    description,
-    name,
-  }: ArgsSearchAndRemove) {
-    let searchInput: SearchComponent | undefined;
-    new Setting(this.containerEl)
-      .setName(name)
-      .setDesc(description)
-      .addSearch((cb) => {
-        searchInput = cb;
-        new FolderSuggest(this.app, cb.inputEl);
-        cb.setPlaceholder('Example: folder1/folder2');
-        // @ts-ignore
-        cb.containerEl.addClass('time_search');
-      })
-      .addButton((cb) => {
-        cb.setIcon('plus');
-        cb.setTooltip('Add folder');
-        cb.onClick(async () => {
-          if (!searchInput) {
-            return;
-          }
-          const newFolder = searchInput.getValue();
+  private renderPatternsSummary(patterns: string[], container: HTMLElement): void {
+    const summary = container.createDiv({ cls: 'setting-item-description' });
 
-          await setValue([...currentList, newFolder].filter(onlyUniqueArray));
-          await this.saveSettings();
-          searchInput.setValue('');
-          this.display();
-        });
-      });
+    if (patterns.length === 0) {
+      summary.setText('No exclude rules set. All folders are monitored.');
+      return;
+    }
 
-    currentList.forEach((ignoreFolder) =>
-      new Setting(this.containerEl).setName(ignoreFolder).addButton((button) =>
-        button.setButtonText('Remove').onClick(async () => {
-          await setValue(currentList.filter((value) => value !== ignoreFolder));
-          await this.saveSettings();
-          this.display();
-        }),
-      ),
-    );
+    const preview = patterns.slice(0, 3).join(', ');
+    const suffix = patterns.length > 3 ? `, +${patterns.length - 3} more` : '';
+    summary.setText(`Rules (${patterns.length}): ${preview}${suffix}`);
   }
 }
 
@@ -306,11 +304,4 @@ type DateFormatArgs = {
   setValue: (newValue: string) => void;
   name: string;
   description: string;
-};
-
-type ArgsSearchAndRemove = {
-  name: string;
-  description: string;
-  currentList: string[];
-  setValue: (newValue: string[]) => Promise<void>;
 };

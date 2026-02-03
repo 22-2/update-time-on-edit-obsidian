@@ -17,3 +17,33 @@
         }
     }
 }
+
+.update-time-on-edit--ignore-modal {
+    width: min(1100px, 96vw);
+
+    .update-time-on-edit--ignore-modal__preview {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+
+    .update-time-on-edit--ignore-modal__preview-list {
+        max-height: 320px;
+        overflow: auto;
+        padding-right: 0.25rem;
+    }
+}
+
+.update-time-on-edit--ignore-modal-parent {
+    width: min(1160px, 98vw);
+    max-width: 98vw;
+}
+ .update-time-on-edit--ignore-modal__preview-group-prefix {
+     font-weight: bold;
+     padding-top: 0.5rem;
+     margin-top: 0.5rem;
+ }
+
+ .update-time-on-edit--ignore-modal__preview-item {
+     padding-left: 1rem;
+ }
