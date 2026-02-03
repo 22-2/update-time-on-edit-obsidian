@@ -46,7 +46,7 @@ const context = await esbuild.context({
   minify: prod,
   outfile: 'dist/main.js',
   define: {
-    __DEV__: JSON.stringify(!prod),
+    __DEV_MODE__ : JSON.stringify(!prod),
   },
   plugins: [
     copy({
