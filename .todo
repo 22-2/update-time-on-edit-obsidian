@@ -1,0 +1,8 @@
+- [x] 外部変更の誤検知、入力中の消失（レースコンディション）の対策
+- [x] date-fns から moment.js への移行
+- [x] data.json の更新頻度抑制
+- [x] exclude 機能の強化
+
+## 既知の不具合
+Frontmatter の勝手な書き換え -> obsidianのprocessFrontMatterの仕様
+テンプレートの日時を引き継ぐ -> templateファイルに日時がハードコードされているだけ、プラグインの問題ではない
