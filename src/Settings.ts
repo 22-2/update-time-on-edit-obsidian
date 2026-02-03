@@ -15,7 +15,6 @@ export interface UpdateTimeOnEditSettings {
   minMinutesBetweenSaves: number;
   // Union because of legacy
   ignoreGlobalFolder?: string | string[];
-  ignoreCreatedFolder?: string | string[];
 
   enableExperimentalHash?: boolean;
   fileHashMap: Record<string, string>;
@@ -29,7 +28,6 @@ export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
   headerCreated: 'created',
   minMinutesBetweenSaves: 1,
   ignoreGlobalFolder: [],
-  ignoreCreatedFolder: [],
   enableExperimentalHash: true,
   fileHashMap: {},
 };
@@ -73,7 +71,6 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
 
     this.addEnableCreated();
     this.addFrontMatterCreated();
-    this.addExcludedCreatedFoldersSetting();
 
     containerEl.createEl('h2', { text: 'Experimental settings' });
 
@@ -182,8 +179,8 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
 
   addEnableCreated(): void {
     new Setting(this.containerEl)
-      .setName('Enable the created front matter key update')
-      .setDesc('Currently, it is set to now if not present')
+      .setName('Automatically add "created" front matter if missing')
+      .setDesc('If enabled, inserts the creation timestamp into the front matter when the configured created key is absent')
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.enableCreateTime)
@@ -228,40 +225,8 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
       );
   }
 
-  addExcludedCreatedFoldersSetting(): void {
-    if (!this.plugin.settings.enableCreateTime) {
-      return;
-    }
-    const patterns = normalizeIgnoreFolders(this.plugin.settings.ignoreCreatedFolder);
-
-    const setting = new Setting(this.containerEl)
-      .setName('Exclude rules for created property')
-      .setDesc(
-        'Files matching these gitignore-style patterns will skip created front matter updates.',
-      )
-      .addButton((btn) =>
-        btn.setButtonText('Edit rules').onClick(() => {
-          new IgnoreRulesModal(this.app, this.plugin, {
-            title: 'Edit created exclusion rules',
-            description:
-              'One pattern per line. Use !pattern to re-include and # for comments.',
-            initialPatterns: this.plugin.settings.ignoreCreatedFolder ?? [],
-            onSave: async (newValue) => {
-              this.plugin.settings.ignoreCreatedFolder = newValue;
-              await this.saveSettings();
-              this.display();
-            },
-          }).open();
-        }),
-      );
-
-    this.renderPatternsSummary(patterns, setting.settingEl);
-  }
-
   addExcludedFoldersSetting(): void {
-    const patterns = this.plugin.getIgnoreFolders();
-
-    const setting = new Setting(this.containerEl)
+    new Setting(this.containerEl)
       .setName('Exclude rules for all updates')
       .setDesc(
         'Gitignore-style patterns. Matching files are ignored for both updated and created timestamps.',
@@ -282,20 +247,6 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
         }),
       );
 
-    this.renderPatternsSummary(patterns, setting.settingEl);
-  }
-
-  private renderPatternsSummary(patterns: string[], container: HTMLElement): void {
-    const summary = container.createDiv({ cls: 'setting-item-description' });
-
-    if (patterns.length === 0) {
-      summary.setText('No exclude rules set. All folders are monitored.');
-      return;
-    }
-
-    const preview = patterns.slice(0, 3).join(', ');
-    const suffix = patterns.length > 3 ? `, +${patterns.length - 3} more` : '';
-    summary.setText(`Rules (${patterns.length}): ${preview}${suffix}`);
   }
 }
 
