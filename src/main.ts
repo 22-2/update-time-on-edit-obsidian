@@ -1,4 +1,4 @@
-import { Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
+import { Notice, Plugin, TAbstractFile, TFile, debounce, getFrontMatterInfo } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   UpdateTimeOnEditSettings,
@@ -323,6 +323,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private async updateFileFrontmatter(file: TFile): Promise<void> {
+      if (this.shouldSkipWhenCursorInFrontmatter(file)) {
+      // 編集中でもファイル内容のキャッシュは最新に保ちたい
+      return;
+    }
+
     await this.app.fileManager.processFrontMatter(
       file,
       (frontmatter) => {
@@ -330,6 +335,51 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       },
       { ctime: file.stat.ctime, mtime: file.stat.mtime },
     );
+  }
+
+  private shouldSkipWhenCursorInFrontmatter(file: TFile): boolean {
+      // Check if we should skip frontmatter update when cursor is in frontmatter
+      if (!this.settings.skipFrontmatterWhenCursorInFrontmatter) {
+      return false;
+    }
+    const activeFile = getActiveFile(this.app);
+    if (activeFile?.path !== file.path) {
+      return false;
+    }
+    const editor = this.app.workspace.activeEditor?.editor;
+    if (!editor) {
+      return false;
+    }
+    const cursorPos = editor.getCursor();
+    const { contentStart: contentStartLine } = getFrontMatterInfo(editor.getDoc().getValue());
+    
+    // Skip update if cursor is before contentStart (i.e., in frontmatter)
+    if (cursorPos.line < contentStartLine) {
+      this.log('Skipping frontmatter update because cursor is in frontmatter area');
+      return true;
+    }
+
+    return false;
+  }
+
+  private getCursorAfterFrontmatter(editor: any): { line: number; ch: number } | null {
+    const content = editor.getValue();
+    const lines = content.split('\n');
+    
+    // Check if file starts with frontmatter
+    if (!lines[0].startsWith('---')) {
+      return { line: 0, ch: 0 };
+    }
+
+    // Find the closing frontmatter delimiter
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].startsWith('---')) {
+        return { line: i + 1, ch: 0 };
+      }
+    }
+
+    // No closing delimiter found
+    return null;
   }
 
   private updateFrontmatterFields(frontmatter: any, file: TFile): void {

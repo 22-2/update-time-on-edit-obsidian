@@ -17,6 +17,7 @@ export interface UpdateTimeOnEditSettings {
 
   enableExperimentalHash?: boolean;
   fileHashMap: Record<string, string>;
+  skipFrontmatterWhenCursorInFrontmatter?: boolean;
 }
 
 export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
   ignoreGlobalFolder: [],
   enableExperimentalHash: true,
   fileHashMap: {},
+  skipFrontmatterWhenCursorInFrontmatter: true,
 };
 
 export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
@@ -89,6 +91,8 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
           new UpdateAllCacheData(this.app, this.plugin).open();
         }),
       );
+
+    this.addSkipFrontmatterWhenCursorInFrontmatter();
   }
 
   async saveSettings() {
@@ -228,6 +232,22 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
         }),
       );
 
+  }
+
+  addSkipFrontmatterWhenCursorInFrontmatter(): void {
+    new Setting(this.containerEl)
+      .setName('Skip frontmatter update while editing frontmatter')
+      .setDesc(
+        'When enabled, frontmatter will not be updated if the cursor is inside the frontmatter area (before content starts).',
+      )
+      .addToggle((cb) =>
+        cb
+          .setValue(this.plugin.settings.skipFrontmatterWhenCursorInFrontmatter ?? true)
+          .onChange(async (newValue) => {
+            this.plugin.settings.skipFrontmatterWhenCursorInFrontmatter = newValue;
+            await this.saveSettings();
+          }),
+      );
   }
 }
 
