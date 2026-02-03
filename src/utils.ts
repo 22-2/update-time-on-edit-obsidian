@@ -56,12 +56,8 @@ export function parseDate(input: number | string, dateFormat: string): Date | un
 /**
  * 日付をフォーマットします
  */
-export function formatDate(input: Date, dateFormat: string, enableNumberProperties: boolean): string | number {
-  const output = format(input, dateFormat);
-  if (/^\d+$/.test(output) && enableNumberProperties) {
-    return parseInt(output);
-  }
-  return output;
+export function formatDate(input: Date, dateFormat: string): string {
+  return format(input, dateFormat);
 }
 /**
  * 更新すべきかどうかを判定します

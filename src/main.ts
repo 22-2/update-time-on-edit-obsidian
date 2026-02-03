@@ -255,7 +255,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     if (!this.settings.enableCreateTime) {
       return true;
     }
-    const ignorePatterns = normalizeIgnoreFolders(this.settings.ignoreCreatedFolder);
+    const ignorePatterns = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
     return isPathIgnored(path, ignorePatterns);
   }
 
@@ -338,7 +338,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       frontmatter[createdKey] = formatDate(
         cTime,
         this.settings.dateFormat,
-        this.settings.enableNumberProperties,
       );
     }
   }
@@ -355,7 +354,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       frontmatter[updatedKey] = formatDate(
         mTime,
         this.settings.dateFormat,
-        this.settings.enableNumberProperties,
       );
       return;
     }
@@ -364,7 +362,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       frontmatter[updatedKey] = formatDate(
         mTime,
         this.settings.dateFormat,
-        this.settings.enableNumberProperties,
       );
       this.log('Update updatedKey');
       return;
