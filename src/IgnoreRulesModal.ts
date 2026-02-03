@@ -1,7 +1,6 @@
 import { App, Modal, Setting, TFolder } from 'obsidian';
-import commonPathPrefix from 'common-path-prefix';
 import UpdateTimeOnSavePlugin from './main';
-import { filterIgnoredFolders, normalizeIgnoreFolders, toPosixPath } from './utils';
+import { filterIgnoredFolders, groupByCommonPrefix, normalizeIgnoreFolders, toPosixPath } from './utils';
 
 type IgnoreRulesModalProps = {
   title: string;
@@ -152,7 +151,7 @@ export class IgnoreRulesModal extends Modal {
   }
 
   private renderGroupedEntries(entries: string[]): HTMLElement[] {
-    const grouped = this.groupByCommonPrefix(entries);
+    const grouped = groupByCommonPrefix(entries);
     const elements: HTMLElement[] = [];
 
     for (const [prefix, items] of grouped.entries()) {
@@ -162,7 +161,7 @@ export class IgnoreRulesModal extends Modal {
         );
       }
 
-      items.forEach((item) => {
+      items.forEach((item: string) => {
         elements.push(
           this.createTextElement(item, 'update-time-on-edit--ignore-modal__preview-item')
         );
@@ -170,60 +169,6 @@ export class IgnoreRulesModal extends Modal {
     }
 
     return elements;
-  }
-
-  private groupByCommonPrefix(entries: string[]): Map<string, string[]> {
-    if (entries.length === 0) {
-      return new Map();
-    }
-
-    const sorted = [...entries].sort();
-    const prefixGroup = new Map<string, string[]>();
-    let i = 0;
-
-    while (i < sorted.length) {
-      const batch = this.findCommonPrefixBatch(sorted, i);
-      
-      if (batch.length > 1) {
-        const prefix = commonPathPrefix(batch);
-        const relativeItems = batch.map((item) => this.stripPrefix(item, prefix));
-        prefixGroup.set(prefix, relativeItems);
-      } else {
-        prefixGroup.set('', batch);
-      }
-      
-      i += batch.length;
-    }
-
-    return prefixGroup;
-  }
-
-  private findCommonPrefixBatch(sorted: string[], startIndex: number): string[] {
-    const current = sorted[startIndex];
-    const batch: string[] = [current];
-    let j = startIndex + 1;
-
-    while (j < sorted.length) {
-      const candidate = sorted[j];
-      const common = commonPathPrefix([current, candidate]);
-      
-      if (common && common !== current && common !== candidate) {
-        batch.push(candidate);
-        j++;
-      } else {
-        break;
-      }
-    }
-
-    return batch;
-  }
-
-  private stripPrefix(fullPath: string, prefix: string): string {
-    if (!prefix || !fullPath.startsWith(prefix)) {
-      return fullPath;
-    }
-    const relative = fullPath.slice(prefix.length).replace(/^\/+/, '');
-    return relative || fullPath;
   }
 
   private buildFolderPreview(patterns: string[]): PreviewData {
