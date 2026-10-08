@@ -82,6 +82,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.setupUserInputTracking();
     this.setupModifyHandler();
     this.setupEditorChangeHandler();
+    this.setupFileOpenHandler();
     this.setupRenameHandler();
     this.setupDeleteHandler();
   }
@@ -111,6 +112,30 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
         }
       }),
     );
+  }
+
+  private setupFileOpenHandler(): void {
+    this.registerEvent(
+      this.app.workspace.on('file-open', (file) => {
+        if (file) {
+          void this.ensureBaselineCache(file);
+        }
+      }),
+    );
+  }
+
+  /**
+   * キャッシュが無いファイルは、開いた時点の内容を基準として記録する。
+   * 記録が無いと、未編集でも最初の保存で必ず更新対象になってしまうため。
+   */
+  private async ensureBaselineCache(file: TFile): Promise<void> {
+    if (!this.settings.enableExperimentalHash) {
+      return;
+    }
+    if (this.isInvalidFile(file) || this.settings.fileHashMap[file.path]) {
+      return;
+    }
+    await this.populateCacheForFile(file);
   }
 
   private setupRenameHandler(): void {
