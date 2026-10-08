@@ -215,6 +215,13 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
         return;
       }
 
+      // 予約から実行までの間にフォーカスやアクティブファイルが変わることがあるため、
+      // 実行時にも再確認する
+      if (!this.isValidActiveFile(file)) {
+        this.log('CONDITIONS CHANGED, CANCEL UPDATE');
+        return;
+      }
+
       void this.handleFileChange(file, triggerSource);
     }, this.DEBOUNCE_DELAY_MS);
 
