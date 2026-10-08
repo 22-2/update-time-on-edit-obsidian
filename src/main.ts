@@ -27,6 +27,8 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   settings!: UpdateTimeOnEditSettings;
   private readonly DEBOUNCE_DELAY_MS = 3000;
   private readonly EDIT_IDLE_DELAY_MS = 1500;
+  private readonly USER_INPUT_WINDOW_MS = 10000;
+  private lastUserInputAt = 0;
   private readonly pendingUpdateTimers = new Map<string, number>();
   private readonly lastEditorChangeAt = new Map<string, number>();
   private settingsWriteQueue!: FileWriteQueue;
@@ -77,6 +79,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private setupEventHandlers(): void {
     this.log('Setup handler');
+    this.setupUserInputTracking();
     this.setupModifyHandler();
     this.setupEditorChangeHandler();
     this.setupRenameHandler();
@@ -158,7 +161,27 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return false;
     }
 
+    // 開いたまま外部（AIなど）から編集された場合は modify だけが発火するので、
+    // 直前にユーザー入力がなければ更新しない
+    if (!this.hasRecentUserInput()) {
+      this.log('no recent user input (external edit?)');
+      return false;
+    }
+
     return true;
+  }
+
+  private hasRecentUserInput(): boolean {
+    return Date.now() - this.lastUserInputAt < this.USER_INPUT_WINDOW_MS;
+  }
+
+  private setupUserInputTracking(): void {
+    // Obsidian の自動保存は入力の数秒後に走るため、窓は保存遅延より長くする
+    const markInput = () => {
+      this.lastUserInputAt = Date.now();
+    };
+    this.registerDomEvent(document, 'beforeinput', markInput, true);
+    this.registerDomEvent(document, 'keydown', markInput, true);
   }
 
   private isFileBeingEdited(filePath: string): boolean {
