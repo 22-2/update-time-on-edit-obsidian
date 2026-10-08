@@ -34,6 +34,19 @@ export function hashString(str: string): string {
   return sha256(str);
 }
 /**
+ * 先頭のフロントマターを取り除いた本文を返します
+ */
+export function stripFrontmatter(content: string): string {
+  return content.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '');
+}
+/**
+ * 本文（フロントマター除く）のハッシュを返します
+ * プロパティだけの変更で更新日時が動かないよう、比較にはこちらを使う
+ */
+export function hashBody(content: string): string {
+  return hashString(stripFrontmatter(content).trim());
+}
+/**
  * 日付をパースします
  */
 export function parseDate(input: number | string, dateFormat: string): Date | undefined {

@@ -8,7 +8,7 @@ import {
 import {
   formatDate,
   getActiveFile,
-  hashString,
+  hashBody,
   isExcalidrawFile,
   isFile,
   isPathIgnored,
@@ -301,7 +301,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return false;
     }
 
-    const currentHash = hashString(fileContent);
+    const currentHash = hashBody(fileContent);
     if (currentHash === cachedHash) {
       this.log('Ignoring file because, sha same');
       return true;
@@ -512,7 +512,7 @@ ${error.message}`;
       return;
     }
 
-    const sha = hashString(fileContent);
+    const sha = hashBody(fileContent);
     this.settings.fileHashMap[file.path] = sha;
     this.saveSettingsBatched();
   }
