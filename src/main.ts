@@ -141,7 +141,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private isValidActiveFile(file: TAbstractFile): boolean {
-    if (!document.hasFocus()) {
+    // ポップアウト対応のため、メインウィンドウ固定の document ではなく
+    // 現在アクティブなウィンドウの document を見る
+    if (!activeDocument.hasFocus()) {
       this.log('not focused');
       return false;
     }
@@ -180,8 +182,18 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     const markInput = () => {
       this.lastUserInputAt = Date.now();
     };
-    this.registerDomEvent(document, 'beforeinput', markInput, true);
-    this.registerDomEvent(document, 'keydown', markInput, true);
+    const trackDocument = (doc: Document) => {
+      this.registerDomEvent(doc, 'beforeinput', markInput, true);
+      this.registerDomEvent(doc, 'keydown', markInput, true);
+    };
+
+    trackDocument(document);
+    // ポップアウトウィンドウは別の document を持つので、開くたびに追加する
+    this.registerEvent(
+      this.app.workspace.on('window-open', (_workspaceWindow, win) => {
+        trackDocument(win.document);
+      }),
+    );
   }
 
   private isFileBeingEdited(filePath: string): boolean {
