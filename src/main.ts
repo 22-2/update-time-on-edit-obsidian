@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile } from 'obsidian';
+import { getFrontMatterInfo, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   type UpdateTimeOnEditSettings,
@@ -7,7 +7,6 @@ import {
 import {
   formatDate,
   getActiveFile,
-  findFrontmatterEndLine,
   hashBody,
   isExcalidrawFile,
   isPathIgnored,
@@ -440,9 +439,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
 
     // metadataCache の位置は入力中に古い値を返し得るため、エディターの今の内容から判定する
-    const lines = editor.getValue().split(/\r?\n/);
-    const frontmatterEndLine = findFrontmatterEndLine(lines);
-    if (frontmatterEndLine !== null && editor.getCursor().line <= frontmatterEndLine) {
+    const { exists, contentStart } = getFrontMatterInfo(editor.getValue());
+    const cursorOffset = editor.posToOffset(editor.getCursor());
+    if (exists && cursorOffset < contentStart) {
       this.log('Skipping frontmatter update because cursor is in frontmatter area');
       return true;
     }
