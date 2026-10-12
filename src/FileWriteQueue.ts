@@ -1,11 +1,11 @@
 import PQueue from 'p-queue';
-import { writeFile } from 'atomically';
+import { writeFile, type Encoding } from 'atomically';
 import { debounce } from 'obsidian';
 
 interface QueuedWrite {
   filePath: string;
   content: string;
-  encoding?: BufferEncoding;
+  encoding?: Encoding;
 }
 
 /**
@@ -36,7 +36,7 @@ export class FileWriteQueue {
    * @param content ファイル内容
    * @param encoding エンコーディング（デフォルト: utf8）
    */
-  public enqueue(filePath: string, content: string, encoding: BufferEncoding = 'utf8'): void {
+  public enqueue(filePath: string, content: string, encoding: Encoding = 'utf8'): void {
     this.pendingWrites.set(filePath, { filePath, content, encoding });
     this.debouncedFlushInternal();
   }
