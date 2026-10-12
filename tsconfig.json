@@ -1,18 +1,23 @@
 {
-  "compilerOptions": {
-    "baseUrl": ".",
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "module": "ESNext",
-    "target": "esnext",
-    "allowJs": true,
-    "noImplicitAny": true,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
-    "importHelpers": true,
-    "strict": true,
-    "types": ["obsidian-typings"],
-    "lib": ["dom", "es5", "scripthost", "es2015"]
-  },
-  "include": ["**/*.ts"]
+    "compilerOptions": {
+        // Project structure
+        "paths": {"*": ["./*"]},
+
+        // Module system
+        "module": "ESNext",
+        "target": "ESNext",
+        "moduleResolution": "bundler",
+        "allowSyntheticDefaultImports": true,
+        "verbatimModuleSyntax": true,
+        "noEmit": true,
+
+        // Type checking
+        "strict": true,
+
+        // Type definitions
+        "types": ["@obsidian-typings/obsidian-public-latest"],
+        "lib": ["DOM", "ESNext"],
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules"]
 }

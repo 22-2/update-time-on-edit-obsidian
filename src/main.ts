@@ -2,7 +2,7 @@ import { Editor, Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian
 import { FileWriteQueue } from './FileWriteQueue';
 import {
   DEFAULT_SETTINGS,
-  UpdateTimeOnEditSettings,
+  type UpdateTimeOnEditSettings,
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
 import {
