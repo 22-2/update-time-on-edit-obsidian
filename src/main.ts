@@ -74,7 +74,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private readonly EDIT_IDLE_DELAY_MS = 1500;
   private readonly USER_INPUT_WINDOW_MS = 10000;
   private lastUserInputAt = 0;
-  private readonly pendingUpdateTimers = new Map<string, number>();
+  // 更新できるのはアクティブなファイルだけなので、予約も常に1件でよい
+  // （別のファイルへ移ると、元の予約は実行時の確認で捨てられる）
+  private pendingUpdateTimer: number | undefined;
   // パス → 本文のハッシュ。「この端末のユーザーが書いたものではない、最後に確認した本文」を表す。
   // 起動をまたいで残す必要が無く、保存すると同期の競合の原因になるため、メモリにだけ持つ。
   private readonly baselineHashes = new Map<string, string>();
@@ -96,9 +98,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   onunload(): void {
     this.log('unloading Update time on edit plugin');
-    for (const filePath of this.pendingUpdateTimers.keys()) {
-      this.clearPendingUpdate(filePath);
-    }
+    this.clearPendingUpdate();
   }
 
   // ==================== Settings ====================
@@ -265,19 +265,16 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     return Date.now() - this.lastUserInputAt < this.EDIT_IDLE_DELAY_MS;
   }
 
-  private clearPendingUpdate(filePath: string): void {
-    const timerId = this.pendingUpdateTimers.get(filePath);
-    if (timerId) {
-      window.clearTimeout(timerId);
-      this.pendingUpdateTimers.delete(filePath);
-    }
+  private clearPendingUpdate(): void {
+    window.clearTimeout(this.pendingUpdateTimer);
+    this.pendingUpdateTimer = undefined;
   }
 
   private scheduleIdleUpdate(file: TFile): void {
-    this.clearPendingUpdate(file.path);
+    this.clearPendingUpdate();
 
-    const timerId = window.setTimeout(() => {
-      this.pendingUpdateTimers.delete(file.path);
+    this.pendingUpdateTimer = window.setTimeout(() => {
+      this.pendingUpdateTimer = undefined;
 
       if (this.isUserTyping()) {
         this.log('EDITING IN PROGRESS, DELAYING UPDATE');
@@ -294,8 +291,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
       void this.handleFileChange(file);
     }, this.DEBOUNCE_DELAY_MS);
-
-    this.pendingUpdateTimers.set(file.path, timerId);
   }
 
   // ==================== File Filtering ====================
