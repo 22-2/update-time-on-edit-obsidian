@@ -4,9 +4,6 @@ import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
 import { App, TAbstractFile, TFile } from 'obsidian';
 
-declare global {
-  var __DEV_MODE__: boolean;
-}
 export function onlyUniqueArray<T>(value: T, index: number, self: T[]) {
   return self.indexOf(value) === index;
 }

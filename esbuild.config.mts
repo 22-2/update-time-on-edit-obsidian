@@ -45,9 +45,6 @@ const context = await esbuild.context({
   treeShaking: true,
   minify: prod,
   outfile: 'dist/main.js',
-  define: {
-    __DEV_MODE__ : JSON.stringify(!prod),
-  },
   plugins: [
     copy({
       resolveFrom: 'cwd',

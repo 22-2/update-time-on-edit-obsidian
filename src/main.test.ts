@@ -80,7 +80,6 @@ async function setup(path = 'note.md') {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.stubGlobal('__DEV_MODE__', false);
   vi.stubGlobal('window', globalThis);
   vi.stubGlobal('moment', (value: number) => ({ format: () => new Date(value).toISOString() }));
   domHandlers.length = 0;

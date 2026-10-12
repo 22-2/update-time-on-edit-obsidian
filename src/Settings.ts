@@ -18,6 +18,7 @@ export interface UpdateTimeOnEditSettings {
   enableExperimentalHash?: boolean;
   fileHashMap: Record<string, string>;
   skipFrontmatterWhenCursorInFrontmatter?: boolean;
+  debugLogging?: boolean;
 }
 
 export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
@@ -30,6 +31,7 @@ export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
   enableExperimentalHash: true,
   fileHashMap: {},
   skipFrontmatterWhenCursorInFrontmatter: true,
+  debugLogging: false,
 };
 
 export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
@@ -93,6 +95,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
       );
 
     this.addSkipFrontmatterWhenCursorInFrontmatter();
+    this.addDebugLogging();
   }
 
   async saveSettings() {
@@ -245,6 +248,20 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.skipFrontmatterWhenCursorInFrontmatter ?? true)
           .onChange(async (newValue) => {
             this.plugin.settings.skipFrontmatterWhenCursorInFrontmatter = newValue;
+            await this.saveSettings();
+          }),
+      );
+  }
+
+  addDebugLogging(): void {
+    new Setting(this.containerEl)
+      .setName('Debug logging')
+      .setDesc('Print detailed logs to the developer console. Leave disabled in normal use.')
+      .addToggle((cb) =>
+        cb
+          .setValue(this.plugin.settings.debugLogging ?? false)
+          .onChange(async (newValue) => {
+            this.plugin.settings.debugLogging = newValue;
             await this.saveSettings();
           }),
       );

@@ -37,9 +37,8 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private debouncedSaveSettings!: () => void;
 
   async onload(): Promise<void> {
-    this.log('loading plugin IN DEV');
-
     await this.loadSettings();
+    this.log('loading plugin');
     this.settingsWriteQueue = new FileWriteQueue();
     
     // Obsidian の debounce を使用して、高頻度な設定保存を制御
@@ -612,7 +611,7 @@ ${error.message}`;
   // ==================== Utilities ====================
 
   private log(...data: any[]): void {
-    if (!__DEV_MODE__) {
+    if (!this.settings.debugLogging) {
       return;
     }
     console.log('[UTOE]:', ...data);
