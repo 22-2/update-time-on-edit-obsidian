@@ -395,7 +395,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
 
     try {
-      await this.updateFileFrontmatter(file);
+      if (!(await this.updateFileFrontmatter(file))) {
+        return { status: 'ignored' };
+      }
       await this.recordBaseline(file);
       return { status: 'ok' };
     } catch (e: unknown) {
@@ -406,10 +408,10 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
   }
 
-  private async updateFileFrontmatter(file: TFile): Promise<void> {
+  // 書き込んだ時だけ true。スキップした時に基準を進めると、その編集が更新日時に反映されなくなる
+  private async updateFileFrontmatter(file: TFile): Promise<boolean> {
     if (this.shouldSkipWhenCursorInFrontmatter(file)) {
-      // 編集中でも基準は最新に保ちたい
-      return;
+      return false;
     }
 
     await this.app.fileManager.processFrontMatter(
@@ -425,6 +427,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       },
       { ctime: file.stat.ctime, mtime: file.stat.mtime },
     );
+    return true;
   }
 
   private shouldSkipWhenCursorInFrontmatter(file: TFile): boolean {

@@ -44,6 +44,7 @@ async function setup(path = 'note.md', loadedData: unknown = null) {
   const workspace = {
     on: vi.fn(),
     onLayoutReady: vi.fn(),
+    activeEditor: undefined as { editor: Record<string, unknown> } | undefined,
     getActiveFile: vi.fn((): TFile | null => file),
     getActiveViewOfType: vi.fn(() => view),
   };
@@ -254,6 +255,29 @@ describe('本文ハッシュの基準', () => {
     s.emit(s.vault, 'rename', s.file, 'old.md');
     s.input();
     expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
+  });
+
+  it('フロントマター内のカーソルでスキップした編集は、基準に含めず後で反映する', async () => {
+    const s = await setup();
+    await openFile(s);
+    s.plugin.settings.skipFrontmatterWhenCursorInFrontmatter = true;
+    const text = '---\na: 1\n---\nedited';
+    let cursorOffset = 2;
+    s.workspace.activeEditor = {
+      editor: {
+        getValue: () => text,
+        getCursor: () => ({ line: 0, ch: 0 }),
+        posToOffset: () => cursorOffset,
+      },
+    };
+    s.vault.read.mockResolvedValue(text);
+    s.input();
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
+    expect(s.processFrontMatter).not.toHaveBeenCalled();
+
+    cursorOffset = text.length;
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ok' });
+    expect(s.processFrontMatter).toHaveBeenCalledOnce();
   });
 
   it('削除すると基準も消える', async () => {
