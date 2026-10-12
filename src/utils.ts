@@ -1,4 +1,4 @@
-import ignore from 'ignore';
+import ignore, { type Ignore } from 'ignore';
 import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
 import { App, moment as obsidianMoment, TAbstractFile, TFile } from 'obsidian';
@@ -138,6 +138,17 @@ export function toPosixPath(path: string): string {
   return path.replace(/\\/g, '/');
 }
 
+// パターンの解析は保存のたびに変わるものではないため、直前の1件だけ使い回す
+let cachedMatcher: { key: string; matcher: Ignore } | undefined;
+
+function getIgnoreMatcher(patterns: string[]): Ignore {
+  const key = patterns.join('\n');
+  if (cachedMatcher?.key !== key) {
+    cachedMatcher = { key, matcher: ignore({ allowRelativePaths: true }).add(patterns) };
+  }
+  return cachedMatcher.matcher;
+}
+
 /**
  * ignoreパッケージによるgitignore風の除外判定を行います
  */
@@ -146,8 +157,7 @@ export function isPathIgnored(path: string, patterns: string[]): boolean {
     return false;
   }
 
-  const matcher = ignore({ allowRelativePaths: true });
-  matcher.add(patterns);
+  const matcher = getIgnoreMatcher(patterns);
 
   const normalizedPath = toPosixPath(path).replace(/^\/+/, '');
   return matcher.ignores(normalizedPath);
@@ -165,8 +175,7 @@ export function filterIgnoredFolders(
     return [];
   }
 
-  const matcher = ignore({ allowRelativePaths: true });
-  matcher.add(normalizedPatterns);
+  const matcher = getIgnoreMatcher(normalizedPatterns);
 
   const normalized = folders.map((folder) => toPosixPath(folder).replace(/\/+$/, ''));
   

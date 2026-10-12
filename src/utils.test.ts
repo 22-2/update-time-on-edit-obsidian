@@ -3,6 +3,7 @@ import {
   filterIgnoredFolders,
   groupByCommonPrefix,
   hashBody,
+  isPathIgnored,
   stripFrontmatter,
 } from './utils';
 
@@ -34,6 +35,15 @@ describe('hashBody', () => {
     expect(hashBody('---\na: 1\n---\nbody')).not.toBe(
       hashBody('---\na: 1\n---\nbody2'),
     );
+  });
+});
+
+describe('isPathIgnored', () => {
+  it('パターンが変わったら判定も変わる（判定オブジェクトを使い回しても）', () => {
+    expect(isPathIgnored('a/b.md', ['a/'])).toBe(true);
+    expect(isPathIgnored('a/b.md', ['a/'])).toBe(true);
+    expect(isPathIgnored('a/b.md', ['c/'])).toBe(false);
+    expect(isPathIgnored('a/b.md', ['a/*', '!a/b.md'])).toBe(false);
   });
 });
 

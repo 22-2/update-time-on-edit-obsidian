@@ -292,8 +292,12 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   // ==================== File Filtering ====================
 
+  // 読み込みの要らない判定を先に行い、無視するファイルの本文は読まない
   async shouldFileBeIgnored(file: TFile): Promise<boolean> {
-    if (this.isInvalidFile(file)) {
+    if (this.isInvalidFile(file) || isExcalidrawFile(file)) {
+      return true;
+    }
+    if (this.isPathInIgnoredFolder(file.path)) {
       return true;
     }
 
@@ -302,15 +306,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return true;
     }
 
-    if (await this.isFileUnchanged(file, fileContent)) {
-      return true;
-    }
-
-    if (isExcalidrawFile(file)) {
-      return true;
-    }
-
-    return this.isFileInIgnoredFolder(file);
+    return this.isFileUnchanged(file, fileContent);
   }
 
   private isInvalidFile(file: TFile): boolean {
@@ -356,7 +352,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
   }
 
-  private async isFileUnchanged(file: TFile, fileContent: string): Promise<boolean> {
+  private isFileUnchanged(file: TFile, fileContent: string): boolean {
     if (!this.settings.enableExperimentalHash) {
       return false;
     }
@@ -374,17 +370,13 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     return false;
   }
 
-  private isFileInIgnoredFolder(file: TFile): boolean {
+  private isPathInIgnoredFolder(path: string): boolean {
     const ignorePatterns = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
-    return isPathIgnored(file.path, ignorePatterns);
+    return isPathIgnored(path, ignorePatterns);
   }
 
   private shouldIgnoreCreated(path: string): boolean {
-    if (!this.settings.enableCreateTime) {
-      return true;
-    }
-    const ignorePatterns = normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
-    return isPathIgnored(path, ignorePatterns);
+    return !this.settings.enableCreateTime || this.isPathInIgnoredFolder(path);
   }
 
   // ==================== File Processing ====================
