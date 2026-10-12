@@ -189,6 +189,18 @@ describe('自動更新の対象とフォーカス', () => {
     expect(s.frontmatter.updated).toBeDefined();
   });
 
+  it('予約の実行時に入力が続いていれば、止まるまで延期する', async () => {
+    const s = await setup();
+    s.input();
+    s.emit(s.vault, 'modify', s.file);
+    await vi.advanceTimersByTimeAsync(2000);
+    s.input();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.processFrontMatter).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(s.processFrontMatter).toHaveBeenCalledOnce();
+  });
+
   it('アンロード時には予約済みの更新を取り消す', async () => {
     const s = await setup();
     s.input();

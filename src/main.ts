@@ -75,7 +75,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private readonly USER_INPUT_WINDOW_MS = 10000;
   private lastUserInputAt = 0;
   private readonly pendingUpdateTimers = new Map<string, number>();
-  private readonly lastEditorChangeAt = new Map<string, number>();
   // パス → 本文のハッシュ。「この端末のユーザーが書いたものではない、最後に確認した本文」を表す。
   // 起動をまたいで残す必要が無く、保存すると同期の競合の原因になるため、メモリにだけ持つ。
   private readonly baselineHashes = new Map<string, string>();
@@ -123,7 +122,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.log('Setup handler');
     this.setupUserInputTracking();
     this.setupModifyHandler();
-    this.setupEditorChangeHandler();
     this.setupFileOpenHandler();
     this.setupRenameHandler();
     this.setupDeleteHandler();
@@ -146,24 +144,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
         }
         this.log('TRIGGER FROM MODIFY');
         this.scheduleIdleUpdate(file);
-      }),
-    );
-  }
-
-  private setupEditorChangeHandler(): void {
-    this.registerEvent(
-      this.app.workspace.on('editor-change', (_editor, view) => {
-        const file = view?.file;
-        if (!file || !this.isValidActiveFile(file)) {
-          return;
-        }
-
-        this.lastEditorChangeAt.set(file.path, Date.now());
-
-        if (this.pendingUpdateTimers.has(file.path)) {
-          this.log('RESCHEDULE BECAUSE EDITING');
-          this.scheduleIdleUpdate(file);
-        }
       }),
     );
   }
@@ -280,12 +260,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     );
   }
 
-  private isFileBeingEdited(filePath: string): boolean {
-    const lastEditAt = this.lastEditorChangeAt.get(filePath);
-    if (!lastEditAt) {
-      return false;
-    }
-    return Date.now() - lastEditAt < this.EDIT_IDLE_DELAY_MS;
+  // 入力が途切れて間もない間は、まだ編集中として書き込みを延期する
+  private isUserTyping(): boolean {
+    return Date.now() - this.lastUserInputAt < this.EDIT_IDLE_DELAY_MS;
   }
 
   private clearPendingUpdate(filePath: string): void {
@@ -302,7 +279,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     const timerId = window.setTimeout(() => {
       this.pendingUpdateTimers.delete(file.path);
 
-      if (this.isFileBeingEdited(file.path)) {
+      if (this.isUserTyping()) {
         this.log('EDITING IN PROGRESS, DELAYING UPDATE');
         this.scheduleIdleUpdate(file);
         return;
