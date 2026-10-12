@@ -23,6 +23,8 @@ interface FileChangeResult {
   error?: any;
 }
 
+class UpdateCancelledError extends Error {}
+
 export default class UpdateTimeOnEditPlugin extends Plugin {
   settings!: UpdateTimeOnEditSettings;
   private readonly DEBOUNCE_DELAY_MS = 3000;
@@ -53,6 +55,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.log('unloading Update time on edit plugin');
+    for (const filePath of this.pendingUpdateTimers.keys()) {
+      this.clearPendingUpdate(filePath);
+    }
     await this.settingsWriteQueue.flushAndWait();
   }
 
@@ -100,7 +105,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('editor-change', (_editor, view) => {
         const file = view?.file;
-        if (!file || file.extension !== 'md') {
+        if (!file || !this.isValidActiveFile(file)) {
           return;
         }
 
@@ -166,25 +171,22 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private isValidActiveFile(file: TAbstractFile): boolean {
-    // ポップアウト対応のため、メインウィンドウ固定の document ではなく
-    // 現在アクティブなウィンドウの document を見る
-    if (!activeDocument.hasFocus()) {
+    if (!isFile(file) || this.isInvalidFile(file)) {
+      this.log('not a vault markdown file');
+      return false;
+    }
+
+    // activeDocument は設定などの別ウィンドウを指すことがあるため、
+    // 対象タブ自身の document でフォーカスを確認する。
+    const viewDocument =
+      this.app.workspace.activeLeaf?.view.containerEl.ownerDocument;
+    if (!viewDocument?.hasFocus()) {
       this.log('not focused');
       return false;
     }
 
-    if (getActiveFile(this.app)?.path !== file.path) {
+    if (getActiveFile(this.app) !== file) {
       this.log('not active file');
-      return false;
-    }
-
-    if (!isFile(file)) {
-      this.log('not a file');
-      return false;
-    }
-
-    if (file.extension !== 'md') {
-      this.log('not a md file');
       return false;
     }
 
@@ -204,10 +206,19 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private setupUserInputTracking(): void {
     // Obsidian の自動保存は入力の数秒後に走るため、窓は保存遅延より長くする
-    const markInput = () => {
-      this.lastUserInputAt = Date.now();
-    };
     const trackDocument = (doc: Document) => {
+      const markInput = () => {
+        const file = getActiveFile(this.app);
+        const viewDocument =
+          this.app.workspace.activeLeaf?.view.containerEl.ownerDocument;
+        if (
+          doc !== viewDocument || !doc.hasFocus() || !file ||
+          this.isInvalidFile(file)
+        ) {
+          return;
+        }
+        this.lastUserInputAt = Date.now();
+      };
       this.registerDomEvent(doc, 'beforeinput', markInput, true);
       this.registerDomEvent(doc, 'keydown', markInput, true);
     };
@@ -290,6 +301,21 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private isInvalidFile(file: TFile): boolean {
     if (!file.path || file.extension !== 'md') {
+      return true;
+    }
+
+    // 外部ファイルも仮想 TFile として vault に登録されることがある。
+    // file: URI・絶対パス・親への参照は vault 相対パスではないため除外する。
+    if (
+      /^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(file.path) ||
+      file.path.split(/[/\\]/).includes('..')
+    ) {
+      return true;
+    }
+    if (
+      file.vault !== this.app.vault ||
+      this.app.vault.getAbstractFileByPath(file.path) !== file
+    ) {
       return true;
     }
 
@@ -376,21 +402,36 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return { status: 'ignored' };
     }
 
+    if (triggerSource === 'modify' && !this.isValidActiveFile(file)) {
+      return { status: 'ignored' };
+    }
+
     if (await this.shouldFileBeIgnored(file)) {
       return { status: 'ignored' };
     }
 
+    // 内容の読み取りを待つ間にフォーカスが変わる場合もある。
+    if (triggerSource === 'modify' && !this.isValidActiveFile(file)) {
+      return { status: 'ignored' };
+    }
+
     try {
-      await this.updateFileFrontmatter(file);
+      await this.updateFileFrontmatter(file, triggerSource);
       await this.populateCacheForFile(file);
       return { status: 'ok' };
     } catch (e: any) {
+      if (e instanceof UpdateCancelledError) {
+        return { status: 'ignored' };
+      }
       return this.handleProcessingError(e, file);
     }
   }
 
-  private async updateFileFrontmatter(file: TFile): Promise<void> {
-      if (this.shouldSkipWhenCursorInFrontmatter(file)) {
+  private async updateFileFrontmatter(
+    file: TFile,
+    triggerSource: 'modify' | 'bulk',
+  ): Promise<void> {
+    if (this.shouldSkipWhenCursorInFrontmatter(file)) {
       // 編集中でもファイル内容のキャッシュは最新に保ちたい
       return;
     }
@@ -398,6 +439,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     await this.app.fileManager.processFrontMatter(
       file,
       (frontmatter) => {
+        // processFrontMatter 内の非同期読み取り後にも書き込み条件を確認する。
+        if (triggerSource === 'modify' && !this.isValidActiveFile(file)) {
+          // コールバックを抜けるだけでは再保存され得るため、処理自体を中断する。
+          throw new UpdateCancelledError();
+        }
         this.updateFrontmatterFields(frontmatter, file);
       },
       { ctime: file.stat.ctime, mtime: file.stat.mtime },
