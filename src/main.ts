@@ -489,25 +489,18 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       this.settings.dateFormat,
     );
 
-    if (!frontmatter[updatedKey] || !currentMTimeOnFile) {
-      this.log('Update updatedKey');
-      frontmatter[updatedKey] = formatDate(
-        mTime,
-        this.settings.dateFormat,
-      );
+    // 値が無い・日付として読めない場合は、期限切れと同じく書き込む
+    const isUpToDate =
+      frontmatter[updatedKey] &&
+      currentMTimeOnFile &&
+      !this.shouldUpdateModifiedTime(mTime, currentMTimeOnFile);
+    if (isUpToDate) {
+      this.log('Skipping updateKey');
       return;
     }
 
-    if (this.shouldUpdateModifiedTime(mTime, currentMTimeOnFile)) {
-      frontmatter[updatedKey] = formatDate(
-        mTime,
-        this.settings.dateFormat,
-      );
-      this.log('Update updatedKey');
-      return;
-    }
-
-    this.log('Skipping updateKey');
+    this.log('Update updatedKey');
+    frontmatter[updatedKey] = formatDate(mTime, this.settings.dateFormat);
   }
 
   private shouldUpdateModifiedTime(mTime: Date, currentMTime: Date): boolean {
