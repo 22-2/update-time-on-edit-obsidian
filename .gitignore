@@ -23,3 +23,10 @@ data.json
 
 # Build output
 dist/
+
+
+# E2E
+obsidian-e2e-toolkit-assets/
+.e2e-plugin/
+playwright-report/
+test-results/

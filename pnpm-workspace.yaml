@@ -2,3 +2,4 @@ allowBuilds:
   electron: true
   esbuild: true
   obsidian-typings: true
+  obsidian-e2e-toolkit: true

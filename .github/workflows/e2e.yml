@@ -1,0 +1,64 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  e2e:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # ツールキットの README によると Ubuntu の GitHub Actions は未対応
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Cache toolkit assets
+        uses: actions/cache@v5
+        with:
+          path: obsidian-e2e-toolkit-assets
+          key: ${{ runner.os }}-obsidian-e2e-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Electron binary
+        # pnpm はライフサイクルスクリプトを実行しない場合があるため、明示的に取得する
+        run: node node_modules/electron/install.js
+
+      - name: Install Obsidian for the toolkit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OBSIDIAN_E2E_TOOLKIT_HOME: ${{ github.workspace }}
+        run: node node_modules/obsidian-e2e-toolkit/scripts/setup.mjs
+
+      - name: Run E2E tests
+        env:
+          CI: true
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: playwright-report
