@@ -4,7 +4,7 @@ import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
 import { App, TAbstractFile, TFile } from 'obsidian';
 
-export function onlyUniqueArray<T>(value: T, index: number, self: T[]) {
+function onlyUniqueArray<T>(value: T, index: number, self: T[]) {
   return self.indexOf(value) === index;
 }
 
@@ -27,7 +27,7 @@ export function isFile(entry: TAbstractFile): entry is TFile {
 /**
  * 文字列をハッシュ化します
  */
-export function hashString(str: string): string {
+function hashString(str: string): string {
   return sha256(str);
 }
 /**
