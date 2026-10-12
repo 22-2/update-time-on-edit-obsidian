@@ -40,7 +40,6 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  // Obsidian 1.13.0 以降で使われる宣言的な定義。display() と同じ項目・保存・副作用を持つ
   getSettingDefinitions(): SettingDefinitionItem[] {
     return [
       {
@@ -161,52 +160,11 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     ];
   }
 
-  // Obsidian 1.13.0 より前の版で使われる命令的な実装。getSettingDefinitions() と項目を揃えること
-  display(): void {
-    let { containerEl } = this;
-
-    containerEl.empty();
-
-    new Setting(containerEl).setName('Global').setHeading();
-
-    this.addExcludedFoldersSetting();
-    this.addTimeBetweenUpdates();
-    this.addDateFormat();
-
-    // new Setting(this.containerEl)
-    //   .setName('Update all files')
-    //   .setDesc(
-    //     'This plugin will only work on new files, but if you want to update all files in your vault at once, you can do it here.',
-    //   )
-    //   .addButton((cb) => {
-    //     cb.setButtonText('Update all files').onClick(() => {
-    //       new UpdateAllModal(this.app, this.plugin).open();
-    //     });
-    //   });
-
-    new Setting(containerEl).setName('Updated at').setHeading();
-
-    this.addFrontMatterUpdated();
-
-    new Setting(containerEl).setName('Created at').setHeading();
-
-    this.addEnableCreated();
-    this.addFrontMatterCreated();
-
-    new Setting(containerEl).setName('Experimental').setHeading();
-
-    this.addHashMatcher();
-    this.addInitialCache();
-    this.addSkipFrontmatterWhenCursorInFrontmatter();
-    this.addDebugLogging();
-  }
-
   async saveSettings() {
     await this.plugin.saveSettings();
   }
 
-  // 保存後に呼ぶ再描画は版によって異なるため、呼び出し側が指定する
-  openIgnoreRulesModal(onSaved?: () => void): void {
+  openIgnoreRulesModal(): void {
     new IgnoreRulesModal(this.app, this.plugin, {
       title: 'Edit exclusion rules',
       description:
@@ -215,7 +173,6 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
       onSave: async (newValue) => {
         this.plugin.settings.ignoreGlobalFolder = newValue;
         await this.saveSettings();
-        onSaved?.();
       },
     }).open();
   }
@@ -258,141 +215,5 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
       `Obsidian default format for date properties: YYYY-MM-DDTHH:mm`,
     );
     return descr;
-  }
-
-  addExcludedFoldersSetting(): void {
-    new Setting(this.containerEl)
-      .setName('Exclude rules for all updates')
-      .setDesc(
-        'Gitignore-style patterns. Matching files are ignored for both updated and created timestamps.',
-      )
-      .addButton((btn) =>
-        btn.setButtonText('Edit rules').onClick(() => {
-          this.openIgnoreRulesModal(() => this.display());
-        }),
-      );
-  }
-
-  addDateFormat(): void {
-    this.renderDateFormatSetting(new Setting(this.containerEl).setName('Date format'));
-  }
-
-  addTimeBetweenUpdates(): void {
-    new Setting(this.containerEl)
-      .setName('Minimum number of minutes between update')
-      .setDesc('If your files are updating too often, increase this.')
-      .addSlider((slider) =>
-        slider
-          .setLimits(1, 30, 1)
-          .setValue(this.plugin.settings.minMinutesBetweenSaves)
-          .onChange(async (value) => {
-            this.plugin.settings.minMinutesBetweenSaves = value;
-            await this.saveSettings();
-          })
-          .setDynamicTooltip(),
-      );
-  }
-
-  addEnableCreated(): void {
-    new Setting(this.containerEl)
-      .setName('Automatically add "created" front matter if missing')
-      .setDesc('If enabled, inserts the creation timestamp into the front matter when the configured created key is absent')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enableCreateTime)
-          .onChange(async (newValue) => {
-            this.plugin.settings.enableCreateTime = newValue;
-            await this.saveSettings();
-            this.display();
-          }),
-      );
-  }
-
-  addFrontMatterUpdated(): void {
-    new Setting(this.containerEl)
-      .setName('Front matter updated name')
-      .setDesc('The key in the front matter YAML for the update time.')
-      .addText((text) =>
-        text
-          .setPlaceholder('Updated')
-          .setValue(this.plugin.settings.headerUpdated ?? '')
-          .onChange(async (value) => {
-            this.plugin.settings.headerUpdated = value;
-            await this.saveSettings();
-          }),
-      );
-  }
-
-  addFrontMatterCreated(): void {
-    if (!this.plugin.settings.enableCreateTime) {
-      return;
-    }
-    new Setting(this.containerEl)
-      .setName('Front matter created name')
-      .setDesc('The key in the front matter YAML for the creation time')
-      .addText((text) =>
-        text
-          .setPlaceholder('Created')
-          .setValue(this.plugin.settings.headerCreated ?? '')
-          .onChange(async (value) => {
-            this.plugin.settings.headerCreated = value;
-            await this.saveSettings();
-          }),
-      );
-  }
-
-  addHashMatcher(): void {
-    new Setting(this.containerEl)
-      .setName('Enable hash matcher')
-      .setDesc(
-        'Using a hash system to prevent too many updates happening, especially with sync.',
-      )
-      .addToggle((cb) =>
-        cb
-          .setValue(this.plugin.settings.enableExperimentalHash ?? true)
-          .onChange(async (newValue) => {
-            this.plugin.settings.enableExperimentalHash = newValue;
-            await this.saveSettings();
-          }),
-      );
-  }
-
-  addInitialCache(): void {
-    new Setting(this.containerEl)
-      .setName('Initial cache')
-      .setDesc('Stores the current content of existing files as the baseline for the hash matcher.')
-      .addButton((btn) =>
-        btn.setButtonText('Fill initial cache').onClick(() => this.openInitialCacheModal()),
-      );
-  }
-
-  addSkipFrontmatterWhenCursorInFrontmatter(): void {
-    new Setting(this.containerEl)
-      .setName('Skip frontmatter update while editing frontmatter')
-      .setDesc(
-        'When enabled, frontmatter will not be updated if the cursor is inside the frontmatter area (before content starts).',
-      )
-      .addToggle((cb) =>
-        cb
-          .setValue(this.plugin.settings.skipFrontmatterWhenCursorInFrontmatter ?? true)
-          .onChange(async (newValue) => {
-            this.plugin.settings.skipFrontmatterWhenCursorInFrontmatter = newValue;
-            await this.saveSettings();
-          }),
-      );
-  }
-
-  addDebugLogging(): void {
-    new Setting(this.containerEl)
-      .setName('Debug logging')
-      .setDesc('Print detailed logs to the developer console. Leave disabled in normal use.')
-      .addToggle((cb) =>
-        cb
-          .setValue(this.plugin.settings.debugLogging ?? false)
-          .onChange(async (newValue) => {
-            this.plugin.settings.debugLogging = newValue;
-            await this.saveSettings();
-          }),
-      );
   }
 }
