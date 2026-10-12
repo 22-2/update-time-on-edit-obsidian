@@ -28,7 +28,7 @@
     "globals": "^17.13.0",
     "jiti": "^2.7.0",
     "obsidian": "^1.14.4",
-    "obsidian-e2e-toolkit": "https://github.com/22-2/obsidian-e2e-toolkit/releases/download/1.4.5/obsidian-e2e-toolkit-1.4.5.tgz",
+    "obsidian-e2e-toolkit": "https://github.com/22-2/obsidian-e2e-toolkit/releases/download/1.5.0/obsidian-e2e-toolkit-1.5.0.tgz",
     "playwright": "^1.64.0",
     "prettier": "^3.9.10",
     "typescript": "^6.0.3",

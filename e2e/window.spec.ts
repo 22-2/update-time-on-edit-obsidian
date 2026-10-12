@@ -4,8 +4,10 @@ import {
   NOTE,
   NOTE_CONTENT,
   OLD_UPDATED,
+  appendExternally,
   editPropertyOnly,
   preparePlugin,
+  setWindowFocus,
   shortenWaits,
   waitNoUpdateWindow,
 } from './helpers';
@@ -65,23 +67,38 @@ test('ポップアウトウィンドウでの入力も更新する', async ({ ob
   await expect.poll(() => obsidian.read(NOTE), { timeout: 10_000 }).not.toContain(OLD_UPDATED);
 });
 
-test('フォーカスが無い間の入力では更新せず、戻れば更新する', async ({ obsidian, page }) => {
+// page.keyboard で入力すると Playwright がウィンドウを再びフォーカスしてしまうため、
+// フォーカスが外れた状態での入力は、入力の後にフォーカスを外す／キーイベントを直接送る形で再現する。
+test('入力の後にフォーカスが外れたら更新せず、戻って入力すれば更新する', async ({ obsidian, page }) => {
   await obsidian.createNote(NOTE, NOTE_CONTENT);
   await obsidian.open(NOTE);
 
-  // Playwright は常にフォーカス済みに見せるため、プラグインが見る hasFocus() を差し替えて再現する
-  await page.evaluate(() => {
-    document.hasFocus = () => false;
-  });
   await page.locator('.cm-content').click();
   await page.keyboard.type('hello');
+  // 自動保存（入力の約2秒後）より前にフォーカスを外す
+  await setWindowFocus(obsidian, page, false);
   await expect.poll(() => obsidian.content()).toContain('hello');
   await waitNoUpdateWindow();
   expect(await obsidian.read(NOTE)).toContain(OLD_UPDATED);
 
-  await page.evaluate(() => {
-    document.hasFocus = () => true;
-  });
+  await setWindowFocus(obsidian, page, true);
   await page.keyboard.type('world');
   await expect.poll(() => obsidian.read(NOTE), { timeout: 10_000 }).not.toContain(OLD_UPDATED);
+});
+
+test('フォーカスが無い間のキー入力は、ユーザーの入力と見なさない', async ({ obsidian, page }) => {
+  await obsidian.createNote(NOTE, NOTE_CONTENT);
+  await obsidian.open(NOTE);
+
+  await page.locator('.cm-content').click();
+  await setWindowFocus(obsidian, page, false);
+  await page.evaluate(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+  });
+  // フォーカスが戻った直後に外部から書き換えられても、先のキー入力が根拠になってはならない
+  await setWindowFocus(obsidian, page, true);
+  await appendExternally(obsidian, NOTE, 'external\n');
+  await expect.poll(() => obsidian.content()).toContain('external');
+  await waitNoUpdateWindow();
+  expect(await obsidian.read(NOTE)).toContain(OLD_UPDATED);
 });

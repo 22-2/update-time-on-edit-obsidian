@@ -1,5 +1,6 @@
 import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
+import { expect, type Page } from '@playwright/test';
 import type { ObsidianAPI } from 'obsidian-e2e-toolkit';
 import { PLUGIN_ID } from './global-setup';
 
@@ -51,4 +52,35 @@ export function editPropertyOnly(obsidian: ObsidianAPI, notePath: string): Promi
       frontmatter.tags = ['property-only'];
     });
   }, notePath);
+}
+
+/**
+ * ウィンドウの実際のフォーカス状態を切り替える。
+ * Playwright は Chromium のページを常にフォーカス済みに見せる（focus emulation）ため、
+ * まずエミュレーションを切る。blur() だけでは OS 側の都合で外れないことがあるため、
+ * フォーカスを外す時は別のウィンドウを前面に出して奪う。
+ */
+export async function setWindowFocus(obsidian: ObsidianAPI, page: Page, focused: boolean): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: focused });
+  await expect
+    .poll(
+      async () => {
+        await obsidian.electronApp.evaluate(({ BrowserWindow }, shouldFocus) => {
+          const holder = globalThis as unknown as { focusStealer?: Electron.BrowserWindow };
+          const [obsidianWindow] = BrowserWindow.getAllWindows().filter((window) => window !== holder.focusStealer);
+          if (shouldFocus) {
+            holder.focusStealer?.close();
+            holder.focusStealer = undefined;
+            obsidianWindow.focus();
+            return;
+          }
+          holder.focusStealer ??= new BrowserWindow({ width: 200, height: 200 });
+          holder.focusStealer.focus();
+        }, focused);
+        return page.evaluate(() => document.hasFocus());
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(focused);
 }
