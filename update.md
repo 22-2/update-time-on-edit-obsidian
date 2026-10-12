@@ -83,15 +83,12 @@
 - **削除した依存**: `builtin-modules`・`chokidar`・`dotenv`・`esbuild-plugin-copy`・`fs-jetpack`・`lightningcss`・`write-file-atomic`・`date-fns`・`@popperjs/core`・`p-queue`・`atomically`・`tslib`、および `yarn.lock`
 - **追加した依存**: ESLint 関連（`eslint`・`eslint-plugin-obsidianmd`・`typescript-eslint`・`globals`・`@eslint/js`・`jiti`）、`prettier`（既存の format スクリプトが参照していた）
 - Node 組み込みモジュールは `node:` 接頭辞付きで書く（esbuild 設定では `node:process`・`node:module`）
+- **最低対応バージョンを Obsidian 1.13.0 に引き上げ**（`manifest.json`）。設定画面は `getSettingDefinitions()` のみで実装し、旧版用の `display()` は削除した
+  - `versions.json` は次のリリースで `pnpm version` が追記する（現在の 2.4.0 → 1.4.4 の記録はそのまま）
 
 ## lint の状況
 
-- `pnpm lint`: error 0 件、warning 17 件
-- 残っている warning
-  - `display()` が非推奨（Obsidian 1.13 以降は `getSettingDefinitions()` を使う）
-  - 非推奨 API の利用（`setDynamicTooltip`・`activeLeaf`）
-  - `TFile` へのキャスト（テストと `main.ts` の 2 箇所）
-  - テストのタイマーと `globalThis` の利用
+- `pnpm lint`: error 0 件、warning 12 件（`main.ts` の `activeLeaf`・`TFile` キャスト、テストの `TFile` キャストとタイマー、テスト用モックの `globalThis`、`vitest.config.mts` の `node:url`）
 
 ## 残タスク・既知事項（`.todo` より）
 
@@ -99,5 +96,5 @@
 - [x] date-fns から moment.js への移行
 - [x] data.json の更新頻度抑制
 - [x] exclude 機能の強化
+- [x] 設定画面を `getSettingDefinitions()`（宣言的な設定 API）に移行し、`display()` を削除
 - 既知の制限：frontmatter の並べ替えが生じるのは `processFrontMatter` の仕様。テンプレートファイルへのヘッダー追記はプラグインの責務外
-- 未対応：設定画面を `getSettingDefinitions()` に移行する（lint warning の解消を含む）
