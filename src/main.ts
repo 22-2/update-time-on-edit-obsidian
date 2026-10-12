@@ -26,7 +26,7 @@ interface FileChangeResult {
 class UpdateCancelledError extends Error {}
 
 export default class UpdateTimeOnEditPlugin extends Plugin {
-  settings!: UpdateTimeOnEditSettings;
+  declare settings: UpdateTimeOnEditSettings;
   private readonly DEBOUNCE_DELAY_MS = 3000;
   private readonly EDIT_IDLE_DELAY_MS = 1500;
   private readonly USER_INPUT_WINDOW_MS = 10000;
