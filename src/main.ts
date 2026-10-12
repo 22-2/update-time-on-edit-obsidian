@@ -1,5 +1,4 @@
 import { Editor, Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
-import { FileWriteQueue } from './FileWriteQueue';
 import {
   DEFAULT_SETTINGS,
   type UpdateTimeOnEditSettings,
@@ -33,14 +32,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private lastUserInputAt = 0;
   private readonly pendingUpdateTimers = new Map<string, number>();
   private readonly lastEditorChangeAt = new Map<string, number>();
-  private settingsWriteQueue!: FileWriteQueue;
   private debouncedSaveSettings!: () => void;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.log('loading plugin');
-    this.settingsWriteQueue = new FileWriteQueue();
-    
     // Obsidian の debounce を使用して、高頻度な設定保存を制御
     this.debouncedSaveSettings = debounce(
       async () => await this.saveSettings(),
@@ -57,7 +53,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     for (const filePath of this.pendingUpdateTimers.keys()) {
       this.clearPendingUpdate(filePath);
     }
-    await this.settingsWriteQueue.flushAndWait();
   }
 
   // ==================== Settings ====================

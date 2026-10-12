@@ -18,12 +18,6 @@ vi.mock('./Settings', () => ({
   UpdateTimeOnEditSettingsTab: class {},
 }));
 
-vi.mock('./FileWriteQueue', () => ({
-  FileWriteQueue: class {
-    async flushAndWait() {}
-  },
-}));
-
 async function setup(path = 'note.md') {
   const doc = { hasFocus: vi.fn(() => true) };
   vi.stubGlobal('document', doc);
