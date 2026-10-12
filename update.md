@@ -50,6 +50,8 @@
 
 ## バグ修正
 
+- **フロントマター終端の判定を厳密化**
+  - `----` のような水平線や `---foo` を区切りと見なして、カーソルがフロントマター内かの判定を誤っていた
 - **一時ファイル "Untitled" を更新対象から除外**
   - 一時ファイル判定をパスではなく **ファイル名**（`Untitled` プレフィックス）で行うよう修正
 - **共通プレフィックスでグルーピングする際、残りの全アイテムが処理されるよう修正**
@@ -58,6 +60,8 @@
 
 ## リファクタリング・整理
 
+- 除外判定は、本文を読む前に軽い判定（無効なファイル・Excalidraw・除外フォルダ）を行い、`ignore` の判定オブジェクトを使い回す
+- 非推奨の `workspace.activeLeaf` を `getActiveViewOfType(MarkdownView)` に置き換え、`isFile`・`isTFile` を `instanceof TFile` に統一
 - `src/main.ts` を機能ごとに分割リファクタリング（ガード、フィルタリング、処理、キャッシュ管理）
 - 日付操作・ユーティリティを `src/utils.ts` に集約
 - **使用していない設定の削除**
@@ -92,7 +96,7 @@
 
 ## lint の状況
 
-- `pnpm lint`: error 0 件、warning 12 件（`main.ts` の `activeLeaf`・`TFile` キャスト、テストの `TFile` キャストとタイマー、テスト用モックの `globalThis`、`vitest.config.mts` の `node:url`）
+- `pnpm lint`: error 0 件、warning 5 件（テストの `TFile` キャストとタイマー、テスト用モックの `globalThis`、`vitest.config.mts` の `node:url`）
 
 ## 残タスク・既知事項（`.todo` より）
 
