@@ -8,8 +8,9 @@ export const OLD_UPDATED = '2000-01-01T00:00';
 export const NOTE_CONTENT = `---\nupdated: ${OLD_UPDATED}\n---\nbody\n`;
 
 // 更新されないことは、待った後に変化が無いことでしか確認できない。
-// 待ち時間は、下で短縮した「入力後の待機＋デバウンス」（合計で約0.5秒）より十分長くする
-const NO_UPDATE_WINDOW_MS = 2_000;
+// 入力の約2秒後に Obsidian が自動保存し、そこから下で短縮したデバウンス（約0.5秒）が走るため、
+// それより十分長く待たないと「更新が来る前に確認が終わる」見逃しになる
+const NO_UPDATE_WINDOW_MS = 4_000;
 export const waitNoUpdateWindow = () => new Promise((resolve) => setTimeout(resolve, NO_UPDATE_WINDOW_MS));
 
 /**

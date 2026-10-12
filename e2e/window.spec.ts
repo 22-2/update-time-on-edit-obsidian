@@ -64,3 +64,24 @@ test('ポップアウトウィンドウでの入力も更新する', async ({ ob
 
   await expect.poll(() => obsidian.read(NOTE), { timeout: 10_000 }).not.toContain(OLD_UPDATED);
 });
+
+test('フォーカスが無い間の入力では更新せず、戻れば更新する', async ({ obsidian, page }) => {
+  await obsidian.createNote(NOTE, NOTE_CONTENT);
+  await obsidian.open(NOTE);
+
+  // Playwright は常にフォーカス済みに見せるため、プラグインが見る hasFocus() を差し替えて再現する
+  await page.evaluate(() => {
+    document.hasFocus = () => false;
+  });
+  await page.locator('.cm-content').click();
+  await page.keyboard.type('hello');
+  await expect.poll(() => obsidian.content()).toContain('hello');
+  await waitNoUpdateWindow();
+  expect(await obsidian.read(NOTE)).toContain(OLD_UPDATED);
+
+  await page.evaluate(() => {
+    document.hasFocus = () => true;
+  });
+  await page.keyboard.type('world');
+  await expect.poll(() => obsidian.read(NOTE), { timeout: 10_000 }).not.toContain(OLD_UPDATED);
+});
