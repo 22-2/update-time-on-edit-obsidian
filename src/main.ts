@@ -36,6 +36,38 @@ function toDateValue(value: unknown): DateValue | undefined {
 
 class UpdateCancelledError extends Error {}
 
+/**
+ * 更新日時を書き込む条件が複雑な理由（設計メモ）
+ *
+ * 目的は「開いているファイルの本文を、この端末のユーザーが編集した時だけ updated を書く」こと。
+ * 次の事実のため、単一のイベントでは判別できず、複数の層を重ねている。
+ *
+ * 1. トリガーを editor-change にしても外部編集を区別できない（Obsidian 1.14.4 で実測）
+ *    - 開いているファイルを外部から書き換えると、modify の約7ms後に editor-change も発火する
+ *    - 自分の processFrontMatter の書き込みでも、modify と editor-change が発火する（自己発火）
+ *    - 開いていないファイルの外部編集は modify だけが発火する
+ *    - 公式ドキュメントに editor-change の発火条件の記載は無い。
+ *      alangrainger/obsidian-frontmatter-modified-date が別途「typing events」モード
+ *      （CodeMirror でユーザー入力だけを拾う）を持つのも同じ理由と思われる
+ *    → 「ユーザー入力があったか」は DOM の beforeinput / keydown で別に追跡する
+ *      （setupUserInputTracking。貼り付けも beforeinput で拾える）
+ *
+ * 2. 同期クライアントはファイルの mtime や改行コードだけを変えることがある
+ *    - modify は内容が変わらなくても発火し、複数端末で更新日時を書き合う往復が起きる
+ *      （upstream の issue #78・#80）。他のプラグインも内容ハッシュ（Frontmatter Date Manager）や
+ *      前回更新からの最小間隔（alangrainger 版は30秒）で対処している
+ *    → 本文のハッシュを基準として持ち、開いた時点から本文が変わっていなければ更新しない。
+ *      外部編集の後は基準を新しい本文に合わせる（でないと、その後のプロパティだけの編集で更新される）
+ *
+ * 3. 入力中に processFrontMatter で書くと、Obsidian が「modified externally, merging changes」を出し、
+ *    直前の入力が消えることがある（upstream #87、alangrainger 版 #32・#59。プラグイン側では直せない）
+ *    → 入力が止まるまで待つ（DEBOUNCE_DELAY_MS・EDIT_IDLE_DELAY_MS）。実行直前にも条件を再確認する
+ *
+ * 4. 非フォーカスのウィンドウやポップアウトでの編集、vault 外の仮想ファイルも modify を起こす
+ *    → 対象タブ自身の document でフォーカスを確認し、isInvalidFile で vault 外のパスを除外する
+ *
+ * 簡素化を検討する時は、上の実測（特に1）が今のバージョンでも成り立つかを先に確かめること。
+ */
 export default class UpdateTimeOnEditPlugin extends Plugin {
   declare settings: UpdateTimeOnEditSettings;
   private readonly DEBOUNCE_DELAY_MS = 3000;
@@ -222,6 +254,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private setupUserInputTracking(): void {
+    // 外部編集と区別するため、modify の直前にユーザー入力があったかを見る（設計メモ参照）。
     // Obsidian の自動保存は入力の数秒後に走るため、窓は保存遅延より長くする
     const trackDocument = (doc: Document) => {
       const markInput = () => {
