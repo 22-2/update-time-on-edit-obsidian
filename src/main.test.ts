@@ -43,7 +43,6 @@ async function setup(path = 'note.md', loadedData: unknown = null) {
   const view = Object.assign(new MarkdownView(), { containerEl: { ownerDocument: doc } });
   const workspace = {
     on: vi.fn(),
-    onLayoutReady: vi.fn(),
     activeEditor: undefined as { editor: Record<string, unknown> } | undefined,
     getActiveFile: vi.fn((): TFile | null => file),
     getActiveViewOfType: vi.fn(() => view),

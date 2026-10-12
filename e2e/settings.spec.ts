@@ -1,5 +1,6 @@
 import { expect, test } from 'obsidian-e2e-toolkit';
 import { PLUGIN_DIR, PLUGIN_ID } from './global-setup';
+import { NOTE_CONTENT, OLD_UPDATED, preparePlugin, waitNoUpdateWindow } from './helpers';
 
 test.use({
   vaultOptions: {
@@ -15,8 +16,7 @@ test.use({
 });
 
 test.beforeEach(async ({ obsidian }) => {
-  await obsidian.waitReady();
-  await obsidian.waitForPluginLoaded(PLUGIN_ID);
+  await preparePlugin(obsidian);
 });
 
 test('旧版の fileHashMap は読み込み時に data.json から取り除かれる', async ({ obsidian }) => {
@@ -27,20 +27,18 @@ test('旧版の fileHashMap は読み込み時に data.json から取り除か�
 });
 
 test('除外フォルダのノートは updated を更新せず、それ以外は更新する', async ({ obsidian, page }) => {
-  const oldUpdated = '2000-01-01T00:00';
-  const content = `---\nupdated: ${oldUpdated}\n---\nbody\n`;
-  await obsidian.createNote('ignored/note.md', content);
-  await obsidian.createNote('kept.md', content);
+  await obsidian.createNote('ignored/note.md', NOTE_CONTENT);
+  await obsidian.createNote('kept.md', NOTE_CONTENT);
 
   await obsidian.open('ignored/note.md');
   await page.locator('.cm-content').click();
   await page.keyboard.type('hello');
   await expect.poll(() => obsidian.content()).toContain('hello');
-  await new Promise((resolve) => setTimeout(resolve, 6_000));
-  expect(await obsidian.read('ignored/note.md')).toContain(oldUpdated);
+  await waitNoUpdateWindow();
+  expect(await obsidian.read('ignored/note.md')).toContain(OLD_UPDATED);
 
   await obsidian.open('kept.md');
   await page.locator('.cm-content').click();
   await page.keyboard.type('hello');
-  await expect.poll(() => obsidian.read('kept.md'), { timeout: 15_000 }).not.toContain(oldUpdated);
+  await expect.poll(() => obsidian.read('kept.md'), { timeout: 10_000 }).not.toContain(OLD_UPDATED);
 });

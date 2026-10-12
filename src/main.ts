@@ -87,13 +87,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
     this.setupEventHandlers();
     this.addSettingTab(new UpdateTimeOnEditSettingsTab(this.app, this));
-    // 起動時に復元されたタブで file-open が発火するとは限らないため、アクティブなファイルを拾う
-    this.app.workspace.onLayoutReady(() => {
-      const file = getActiveFile(this.app);
-      if (file) {
-        void this.ensureBaseline(file);
-      }
-    });
   }
 
   onunload(): void {
