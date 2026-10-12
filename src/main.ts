@@ -1,4 +1,4 @@
-import { Editor, Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
+import { Editor, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   type UpdateTimeOnEditSettings,
@@ -9,9 +9,7 @@ import {
   getActiveFile,
   hashBody,
   isExcalidrawFile,
-  isFile,
   isPathIgnored,
-  isTFile,
   normalizeIgnoreFolders,
   parseDate,
   shouldUpdateValue,
@@ -102,7 +100,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupModifyHandler(): void {
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
-        if (!isFile(file) || this.isInvalidFile(file)) {
+        if (!(file instanceof TFile) || this.isInvalidFile(file)) {
           return;
         }
         // 外部（同期・AIなど）からの編集は、更新日時の対象にせず基準だけを新しい本文に合わせる。
@@ -187,17 +185,19 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   // ==================== File Guards ====================
 
-  private isValidActiveFile(file: TAbstractFile): boolean {
-    if (!isFile(file) || this.isInvalidFile(file)) {
+  // activeDocument は設定などの別ウィンドウを指すことがあるため、
+  // アクティブなマークダウンのタブ自身の document を使う（ポップアウトにも対応）
+  private getActiveViewDocument(): Document | undefined {
+    return this.app.workspace.getActiveViewOfType(MarkdownView)?.containerEl.ownerDocument;
+  }
+
+  private isValidActiveFile(file: TFile): boolean {
+    if (this.isInvalidFile(file)) {
       this.log('not a vault markdown file');
       return false;
     }
 
-    // activeDocument は設定などの別ウィンドウを指すことがあるため、
-    // 対象タブ自身の document でフォーカスを確認する。
-    const viewDocument =
-      this.app.workspace.activeLeaf?.view.containerEl.ownerDocument;
-    if (!viewDocument?.hasFocus()) {
+    if (!this.getActiveViewDocument()?.hasFocus()) {
       this.log('not focused');
       return false;
     }
@@ -226,10 +226,8 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     const trackDocument = (doc: Document) => {
       const markInput = () => {
         const file = getActiveFile(this.app);
-        const viewDocument =
-          this.app.workspace.activeLeaf?.view.containerEl.ownerDocument;
         if (
-          doc !== viewDocument || !doc.hasFocus() || !file ||
+          doc !== this.getActiveViewDocument() || !doc.hasFocus() || !file ||
           this.isInvalidFile(file)
         ) {
           return;
@@ -381,11 +379,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   // ==================== File Processing ====================
 
-  async handleFileChange(file: TAbstractFile): Promise<FileChangeResult> {
-    if (!isTFile(file)) {
-      return { status: 'ignored' };
-    }
-
+  async handleFileChange(file: TFile): Promise<FileChangeResult> {
     if (!this.isValidActiveFile(file)) {
       return { status: 'ignored' };
     }

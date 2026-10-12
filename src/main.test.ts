@@ -1,6 +1,6 @@
 import type { App, PluginManifest, TFile } from 'obsidian';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { domHandlers } from '../test/obsidian';
+import { domHandlers, MarkdownView, TFile as MockTFile } from '../test/obsidian';
 import UpdateTimeOnEditPlugin from './main';
 
 vi.mock('./Settings', () => ({
@@ -27,24 +27,25 @@ async function setup(path = 'note.md', loadedData: unknown = null) {
       path === file.path ? file : null,
     ),
   };
-  const file = {
+  const file = Object.assign(new MockTFile(), {
     path,
     extension: 'md',
     name: 'note.md',
     vault,
     stat: { ctime: Date.now(), mtime: Date.now(), size: 4 },
-  } as unknown as TFile;
+  }) as unknown as TFile;
   const frontmatter: Record<string, unknown> = {};
   const processFrontMatter = vi.fn(
     async (_file: TFile, callback: (data: Record<string, unknown>) => void) => {
       callback(frontmatter);
     },
   );
+  const view = Object.assign(new MarkdownView(), { containerEl: { ownerDocument: doc } });
   const workspace = {
     on: vi.fn(),
     onLayoutReady: vi.fn(),
     getActiveFile: vi.fn((): TFile | null => file),
-    activeLeaf: { view: { containerEl: { ownerDocument: doc } } },
+    getActiveViewOfType: vi.fn(() => view),
   };
   const plugin = new UpdateTimeOnEditPlugin(
     { vault, workspace, fileManager: { processFrontMatter } } as unknown as App,
@@ -70,7 +71,7 @@ async function setup(path = 'note.md', loadedData: unknown = null) {
     }
     callback(...args);
   };
-  return { plugin, saveData, file, doc, vault, workspace, processFrontMatter, frontmatter, input, emit };
+  return { plugin, saveData, view, file, doc, vault, workspace, processFrontMatter, frontmatter, input, emit };
 }
 
 beforeEach(() => {
@@ -181,7 +182,7 @@ describe('自動更新の対象とフォーカス', () => {
     const s = await setup();
     const popupDocument = { hasFocus: vi.fn(() => true) };
     s.doc.hasFocus.mockReturnValue(false);
-    s.workspace.activeLeaf.view.containerEl.ownerDocument = popupDocument;
+    s.view.containerEl.ownerDocument = popupDocument;
     s.emit(s.workspace, 'window-open', {}, { document: popupDocument });
     s.input(popupDocument);
     expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ok' });

@@ -1,7 +1,7 @@
 import ignore, { type Ignore } from 'ignore';
 import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
-import { App, moment as obsidianMoment, TAbstractFile, TFile } from 'obsidian';
+import { App, moment as obsidianMoment, TFile } from 'obsidian';
 
 interface MomentInstance {
   isValid(): boolean;
@@ -22,21 +22,12 @@ function onlyUniqueArray<T>(value: T, index: number, self: T[]) {
   return self.indexOf(value) === index;
 }
 
-export function isTFile(value: TAbstractFile): value is TFile {
-  return 'stat' in value;
-}
 // ユーティリティ関数群
 /**
  * 現在のファイルを取得します
  */
 export function getActiveFile(app: App): TFile | null {
   return app.workspace.getActiveFile();
-}
-/**
- * entryがファイルであるかを判定します
- */
-export function isFile(entry: TAbstractFile): entry is TFile {
-  return 'stat' in entry;
 }
 /**
  * 文字列をハッシュ化します

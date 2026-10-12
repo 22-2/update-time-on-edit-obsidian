@@ -17,6 +17,8 @@ export class Plugin {
 }
 
 export class Notice {}
+export class TFile {}
+export class MarkdownView {}
 
 // テストごとに vi.stubGlobal('moment', ...) で差し替えられるよう、呼び出し時に解決する
 type MomentLike = (...args: unknown[]) => unknown;
