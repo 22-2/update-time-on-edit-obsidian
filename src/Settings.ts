@@ -13,7 +13,6 @@ export interface UpdateTimeOnEditSettings {
   ignoreGlobalFolder?: string | string[];
 
   enableExperimentalHash?: boolean;
-  fileHashMap: Record<string, string>;
   skipFrontmatterWhenCursorInFrontmatter?: boolean;
   debugLogging?: boolean;
 }
@@ -26,7 +25,6 @@ export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
   minMinutesBetweenSaves: 1,
   ignoreGlobalFolder: [],
   enableExperimentalHash: true,
-  fileHashMap: {},
   skipFrontmatterWhenCursorInFrontmatter: true,
   debugLogging: false,
 };
@@ -120,7 +118,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
         items: [
           {
             name: 'Enable hash matcher',
-            desc: 'Using a hash system to prevent too many updates happening, especially with sync.',
+            desc: 'Compares the body (front matter excluded) with its content when the file was opened or last synced, and skips the update if it has not changed. Prevents needless updates from sync or property-only edits.',
             control: {
               type: 'toggle',
               key: 'enableExperimentalHash',

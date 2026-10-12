@@ -1,4 +1,4 @@
-import { Editor, Notice, Plugin, TAbstractFile, TFile, debounce } from 'obsidian';
+import { Editor, Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   type UpdateTimeOnEditSettings,
@@ -25,6 +25,9 @@ interface FileChangeResult {
 
 type FrontMatter = Record<string, unknown>;
 
+// 旧版が data.json に保存していたハッシュ。今はメモリにだけ持つので、読み込み時に捨てる
+type LoadedData = Partial<UpdateTimeOnEditSettings> & { fileHashMap?: unknown };
+
 // frontmatter の値のうち、日付として解釈できる型だけを取り出す
 function toDateValue(value: unknown): DateValue | undefined {
   if (value instanceof Date || typeof value === 'string' || typeof value === 'number') {
@@ -43,20 +46,23 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private lastUserInputAt = 0;
   private readonly pendingUpdateTimers = new Map<string, number>();
   private readonly lastEditorChangeAt = new Map<string, number>();
-  private debouncedSaveSettings!: () => void;
+  // パス → 本文のハッシュ。「この端末のユーザーが書いたものではない、最後に確認した本文」を表す。
+  // 起動をまたいで残す必要が無く、保存すると同期の競合の原因になるため、メモリにだけ持つ。
+  private readonly baselineHashes = new Map<string, string>();
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.log('loading plugin');
-    // Obsidian の debounce を使用して、高頻度な設定保存を制御
-    this.debouncedSaveSettings = debounce(
-      async () => await this.saveSettings(),
-      1000,
-      true,
-    );
 
     this.setupEventHandlers();
     this.addSettingTab(new UpdateTimeOnEditSettingsTab(this.app, this));
+    // 起動時に復元されたタブで file-open が発火するとは限らないため、アクティブなファイルを拾う
+    this.app.workspace.onLayoutReady(() => {
+      const file = getActiveFile(this.app);
+      if (file) {
+        void this.ensureBaseline(file);
+      }
+    });
   }
 
   onunload(): void {
@@ -69,20 +75,16 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   // ==================== Settings ====================
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const loaded = (await this.loadData()) as LoadedData | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+    if (loaded && 'fileHashMap' in loaded) {
+      delete (this.settings as LoadedData).fileHashMap;
+      await this.saveSettings();
+    }
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
-  }
-
-  /**
-   * 設定をバッチ保存（デバウンス済み）
-   * 高頻度な保存リクエストを1秒でまとめて1回の実際の保存にする
-   * data.json の FileLocked 問題を軽減
-   */
-  saveSettingsBatched(): void {
-    this.debouncedSaveSettings();
   }
 
   // ==================== Event Handlers ====================
@@ -99,10 +101,22 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private setupModifyHandler(): void {
     this.registerEvent(
-      this.app.vault.on('modify', this.createActiveFileGuard((file) => {
+      this.app.vault.on('modify', (file) => {
+        if (!isFile(file) || this.isInvalidFile(file)) {
+          return;
+        }
+        // 外部（同期・AIなど）からの編集は、更新日時の対象にせず基準だけを新しい本文に合わせる。
+        // 合わせないと、その後のプロパティだけの編集で更新されてしまう。
+        if (!this.hasRecentUserInput()) {
+          void this.refreshBaselineIfTracked(file);
+          return;
+        }
+        if (!this.isValidActiveFile(file)) {
+          return;
+        }
         this.log('TRIGGER FROM MODIFY');
         this.scheduleIdleUpdate(file);
-      })),
+      }),
     );
   }
 
@@ -128,30 +142,37 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', (file) => {
         if (file) {
-          void this.ensureBaselineCache(file);
+          void this.ensureBaseline(file);
         }
       }),
     );
   }
 
   /**
-   * キャッシュが無いファイルは、開いた時点の内容を基準として記録する。
+   * 基準が無いファイルは、開いた時点の内容を基準として記録する。
    * 記録が無いと、未編集でも最初の保存で必ず更新対象になってしまうため。
    */
-  private async ensureBaselineCache(file: TFile): Promise<void> {
+  private async ensureBaseline(file: TFile): Promise<void> {
     if (!this.settings.enableExperimentalHash) {
       return;
     }
-    if (this.isInvalidFile(file) || this.settings.fileHashMap[file.path]) {
+    if (this.isInvalidFile(file) || this.baselineHashes.has(file.path)) {
       return;
     }
-    await this.populateCacheForFile(file);
+    await this.recordBaseline(file);
+  }
+
+  private async refreshBaselineIfTracked(file: TFile): Promise<void> {
+    if (!this.settings.enableExperimentalHash || !this.baselineHashes.has(file.path)) {
+      return;
+    }
+    await this.recordBaseline(file);
   }
 
   private setupRenameHandler(): void {
     this.registerEvent(
       this.app.vault.on('rename', (file, oldPath) => {
-        this.handleFileRename(file, oldPath);
+        this.moveBaseline(oldPath, file.path);
       }),
     );
   }
@@ -159,21 +180,12 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupDeleteHandler(): void {
     this.registerEvent(
       this.app.vault.on('delete', (file) => {
-        void this.handleFileDelete(file);
+        this.baselineHashes.delete(file.path);
       }),
     );
   }
 
   // ==================== File Guards ====================
-
-  private createActiveFileGuard(fn: (file: TFile) => void) {
-    return (file: TAbstractFile) => {
-      if (!this.isValidActiveFile(file)) {
-        return;
-      }
-      fn(file as TFile);
-    };
-  }
 
   private isValidActiveFile(file: TAbstractFile): boolean {
     if (!isFile(file) || this.isInvalidFile(file)) {
@@ -349,13 +361,12 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       return false;
     }
 
-    const cachedHash = this.settings.fileHashMap[file.path];
-    if (!cachedHash) {
+    const baselineHash = this.baselineHashes.get(file.path);
+    if (!baselineHash) {
       return false;
     }
 
-    const currentHash = hashBody(fileContent);
-    if (currentHash === cachedHash) {
+    if (hashBody(fileContent) === baselineHash) {
       this.log('Ignoring file because, sha same');
       return true;
     }
@@ -398,7 +409,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
     try {
       await this.updateFileFrontmatter(file);
-      await this.populateCacheForFile(file);
+      await this.recordBaseline(file);
       return { status: 'ok' };
     } catch (e: unknown) {
       if (e instanceof UpdateCancelledError) {
@@ -410,7 +421,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private async updateFileFrontmatter(file: TFile): Promise<void> {
     if (this.shouldSkipWhenCursorInFrontmatter(file)) {
-      // 編集中でもファイル内容のキャッシュは最新に保ちたい
+      // 編集中でも基準は最新に保ちたい
       return;
     }
 
@@ -554,38 +565,29 @@ ${error.message}`;
     return { status: 'error', error };
   }
 
-  // ==================== Cache Management ====================
+  // ==================== Baseline Management ====================
 
-  async populateCacheForFile(file: TFile): Promise<void> {
+  private async recordBaseline(file: TFile): Promise<void> {
+    if (!this.settings.enableExperimentalHash) {
+      return;
+    }
     const fileContent = await this.getFileContent(file);
     if (!fileContent) {
       return;
     }
 
-    const sha = hashBody(fileContent);
-    this.settings.fileHashMap[file.path] = sha;
-    this.saveSettingsBatched();
+    this.baselineHashes.set(file.path, hashBody(fileContent));
   }
 
-  private handleFileRename(file: TAbstractFile, oldPath: string): void {
-    const hash = this.settings.fileHashMap[oldPath];
+  // フォルダの改名では子ファイルの基準が残らないが、次に開いた時に作り直されるので問題ない
+  private moveBaseline(oldPath: string, newPath: string): void {
+    const hash = this.baselineHashes.get(oldPath);
     if (!hash) {
       return;
     }
 
-    this.settings.fileHashMap[file.path] = hash;
-    delete this.settings.fileHashMap[oldPath];
-    this.saveSettingsBatched();
-  }
-
-  private async handleFileDelete(file: TAbstractFile): Promise<void> {
-    const sha = this.settings.fileHashMap[file.path];
-    if (!sha) {
-      return;
-    }
-
-    delete this.settings.fileHashMap[file.path];
-    this.saveSettingsBatched();
+    this.baselineHashes.set(newPath, hash);
+    this.baselineHashes.delete(oldPath);
   }
 
   // ==================== Utilities ====================

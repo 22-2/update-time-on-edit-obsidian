@@ -12,13 +12,12 @@ vi.mock('./Settings', () => ({
     minMinutesBetweenSaves: 1,
     ignoreGlobalFolder: [],
     enableExperimentalHash: false,
-    fileHashMap: {},
     skipFrontmatterWhenCursorInFrontmatter: false,
   },
   UpdateTimeOnEditSettingsTab: class {},
 }));
 
-async function setup(path = 'note.md') {
+async function setup(path = 'note.md', loadedData: unknown = null) {
   const doc = { hasFocus: vi.fn(() => true) };
   vi.stubGlobal('document', doc);
   const vault = {
@@ -43,6 +42,7 @@ async function setup(path = 'note.md') {
   );
   const workspace = {
     on: vi.fn(),
+    onLayoutReady: vi.fn(),
     getActiveFile: vi.fn((): TFile | null => file),
     activeLeaf: { view: { containerEl: { ownerDocument: doc } } },
   };
@@ -50,8 +50,9 @@ async function setup(path = 'note.md') {
     { vault, workspace, fileManager: { processFrontMatter } } as unknown as App,
     {} as PluginManifest,
   );
+  const saveData = vi.spyOn(plugin, 'saveData');
+  vi.spyOn(plugin, 'loadData').mockResolvedValue(loadedData);
   await plugin.onload();
-  plugin.settings.fileHashMap = {};
 
   const input = (target = doc) => {
     const listener = domHandlers.find(
@@ -69,7 +70,7 @@ async function setup(path = 'note.md') {
     }
     callback(...args);
   };
-  return { plugin, file, doc, vault, workspace, processFrontMatter, frontmatter, input, emit };
+  return { plugin, saveData, file, doc, vault, workspace, processFrontMatter, frontmatter, input, emit };
 }
 
 beforeEach(() => {
@@ -104,7 +105,7 @@ describe('自動更新の対象とフォーカス', () => {
     s.plugin.settings.enableExperimentalHash = true;
     s.emit(s.workspace, 'file-open', s.file);
     await vi.runAllTimersAsync();
-    expect(s.plugin.settings.fileHashMap).toEqual({});
+    expect(s.vault.read).not.toHaveBeenCalled();
   });
 
   it('フォーカスのある vault 内の編集は更新する', async () => {
@@ -194,5 +195,81 @@ describe('自動更新の対象とフォーカス', () => {
     s.plugin.onunload();
     await vi.runAllTimersAsync();
     expect(s.processFrontMatter).not.toHaveBeenCalled();
+  });
+});
+
+describe('本文ハッシュの基準', () => {
+  const openFile = async (s: Awaited<ReturnType<typeof setup>>) => {
+    s.plugin.settings.enableExperimentalHash = true;
+    s.emit(s.workspace, 'file-open', s.file);
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  it('開いた時点から本文が変わっていなければ更新しない', async () => {
+    const s = await setup();
+    await openFile(s);
+    s.input();
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
+    expect(s.processFrontMatter).not.toHaveBeenCalled();
+  });
+
+  it('本文が変わっていれば更新し、その本文を新しい基準にする', async () => {
+    const s = await setup();
+    await openFile(s);
+    s.input();
+    s.vault.read.mockResolvedValue('edited');
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ok' });
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
+    expect(s.processFrontMatter).toHaveBeenCalledOnce();
+  });
+
+  it('外部からの編集の後にプロパティだけを変えても更新しない', async () => {
+    const s = await setup();
+    await openFile(s);
+    s.vault.read.mockResolvedValue('synced');
+    s.emit(s.vault, 'modify', s.file);
+    await vi.advanceTimersByTimeAsync(0);
+    s.input();
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
+    expect(s.processFrontMatter).not.toHaveBeenCalled();
+  });
+
+  it('改名した後も基準が引き継がれる', async () => {
+    const s = await setup('old.md');
+    await openFile(s);
+    s.file.path = 'new.md';
+    s.emit(s.vault, 'rename', s.file, 'old.md');
+    s.input();
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
+  });
+
+  it('削除すると基準も消える', async () => {
+    const s = await setup();
+    await openFile(s);
+    s.emit(s.vault, 'delete', s.file);
+    s.input();
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ok' });
+  });
+
+  it('ハッシュ照合を無効にすると基準を記録しない', async () => {
+    const s = await setup();
+    s.emit(s.workspace, 'file-open', s.file);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.vault.read).not.toHaveBeenCalled();
+  });
+});
+
+describe('旧版の設定の移行', () => {
+  it('読み込んだデータに fileHashMap があれば削除して保存する', async () => {
+    const s = await setup('note.md', { headerUpdated: 'modified', fileHashMap: { 'a.md': 'x' } });
+    expect(s.plugin.settings).not.toHaveProperty('fileHashMap');
+    expect(s.plugin.settings.headerUpdated).toBe('modified');
+    expect(s.saveData).toHaveBeenCalledOnce();
+    expect(s.saveData.mock.calls[0][0]).not.toHaveProperty('fileHashMap');
+  });
+
+  it('fileHashMap が無ければ保存しない', async () => {
+    const s = await setup();
+    expect(s.saveData).not.toHaveBeenCalled();
   });
 });
