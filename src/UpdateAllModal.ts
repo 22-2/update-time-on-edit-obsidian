@@ -107,7 +107,7 @@ export class UpdateAllModal extends Modal {
           .setButtonText('Run')
           .setCta()
           .onClick(() => {
-            this.onRun();
+            void this.onRun();
           });
         this.runButton = btn;
       })

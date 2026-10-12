@@ -63,11 +63,11 @@ async function setup(path = 'note.md') {
     listener.handler();
   };
   const emit = (source: typeof vault | typeof workspace, name: string, ...args: unknown[]) => {
-    const callback = source.on.mock.calls.find(([event]) => event === name)?.[1];
+    const callback = source.on.mock.calls.find(([event]) => event === name)?.[1] as ((...args: unknown[]) => void) | undefined;
     if (!callback) {
       throw new Error(`イベントが見つかりません: ${name}`);
     }
-    (callback as (...args: unknown[]) => void)(...args);
+    callback(...args);
   };
   return { plugin, file, doc, vault, workspace, processFrontMatter, frontmatter, input, emit };
 }
@@ -192,7 +192,7 @@ describe('自動更新の対象とフォーカス', () => {
     const s = await setup();
     s.input();
     s.emit(s.vault, 'modify', s.file);
-    await s.plugin.onunload();
+    s.plugin.onunload();
     await vi.runAllTimersAsync();
     expect(s.processFrontMatter).not.toHaveBeenCalled();
   });

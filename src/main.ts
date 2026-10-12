@@ -59,7 +59,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.addSettingTab(new UpdateTimeOnEditSettingsTab(this.app, this));
   }
 
-  async onunload(): Promise<void> {
+  onunload(): void {
     this.log('unloading Update time on edit plugin');
     for (const filePath of this.pendingUpdateTimers.keys()) {
       this.clearPendingUpdate(filePath);
@@ -158,8 +158,8 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private setupDeleteHandler(): void {
     this.registerEvent(
-      this.app.vault.on('delete', async (file) => {
-        await this.handleFileDelete(file);
+      this.app.vault.on('delete', (file) => {
+        void this.handleFileDelete(file);
       }),
     );
   }
@@ -621,6 +621,6 @@ ${error.message}`;
     if (!this.settings.debugLogging) {
       return;
     }
-    console.log('[UTOE]:', ...data);
+    console.debug('[UTOE]:', ...data);
   }
 }

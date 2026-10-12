@@ -64,7 +64,6 @@ export class IgnoreRulesModal extends Modal {
       placeholder: 'docs/**\n!docs/keep-me.md\n# Comments are allowed',
     });
     this.textareaEl.rows = 10;
-    this.textareaEl.style.width = '100%';
     this.textareaEl.addEventListener('input', () => this.refreshPreview());
 
     wrapper.createEl('p', {

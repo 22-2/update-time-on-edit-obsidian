@@ -45,7 +45,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    new Setting(containerEl).setName('Global settings').setHeading();
+    new Setting(containerEl).setName('Global').setHeading();
 
     this.addExcludedFoldersSetting();
     this.addTimeBetweenUpdates();
@@ -71,7 +71,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     this.addEnableCreated();
     this.addFrontMatterCreated();
 
-    new Setting(containerEl).setName('Experimental settings').setHeading();
+    new Setting(containerEl).setName('Experimental').setHeading();
 
     new Setting(this.containerEl)
       .setName('Enable hash matcher')
@@ -123,7 +123,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
         'Check ',
         descr.createEl('a', {
           href: 'https://momentjs.com/docs/#/displaying/format/',
-          text: 'moment documentation',
+          text: 'Moment documentation',
         }),
         descr.createEl('br'),
         `Currently: ${moment().format(getValue())}`,
@@ -181,10 +181,10 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
   addFrontMatterUpdated(): void {
     new Setting(this.containerEl)
       .setName('Front matter updated name')
-      .setDesc('The key in the front matter yaml for the update time.')
+      .setDesc('The key in the front matter YAML for the update time.')
       .addText((text) =>
         text
-          .setPlaceholder('updated')
+          .setPlaceholder('Updated')
           .setValue(this.plugin.settings.headerUpdated ?? '')
           .onChange(async (value) => {
             this.plugin.settings.headerUpdated = value;
@@ -199,10 +199,10 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     }
     new Setting(this.containerEl)
       .setName('Front matter created name')
-      .setDesc('The key in the front matter yaml for the creation time')
+      .setDesc('The key in the front matter YAML for the creation time')
       .addText((text) =>
         text
-          .setPlaceholder('updated')
+          .setPlaceholder('Updated')
           .setValue(this.plugin.settings.headerCreated ?? '')
           .onChange(async (value) => {
             this.plugin.settings.headerCreated = value;

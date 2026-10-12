@@ -47,3 +47,7 @@
  .update-time-on-edit--ignore-modal__preview-item {
      padding-left: 1rem;
  }
+
+.update-time-on-edit--ignore-modal__editor textarea {
+    width: 100%;
+}
