@@ -1,7 +1,7 @@
 import ignore, { type Ignore } from 'ignore';
 import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
-import { App, moment as obsidianMoment, TFile } from 'obsidian';
+import { App, getFrontMatterInfo, moment as obsidianMoment, TFile } from 'obsidian';
 
 interface MomentInstance {
   isValid(): boolean;
@@ -36,17 +36,13 @@ function hashString(str: string): string {
   return sha256(str);
 }
 /**
- * 先頭のフロントマターを取り除いた本文を返します
- */
-export function stripFrontmatter(content: string): string {
-  return content.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '');
-}
-/**
  * 本文（フロントマター除く）のハッシュを返します
  * プロパティだけの変更で更新日時が動かないよう、比較にはこちらを使う
  */
 export function hashBody(content: string): string {
-  return hashString(stripFrontmatter(content).trim());
+  const { exists, contentStart } = getFrontMatterInfo(content);
+  const body = exists ? content.slice(contentStart) : content;
+  return hashString(body.trim());
 }
 /**
  * 日付をパースします

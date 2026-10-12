@@ -4,31 +4,17 @@ import {
   groupByCommonPrefix,
   hashBody,
   isPathIgnored,
-  stripFrontmatter,
 } from './utils';
-
-describe('stripFrontmatter', () => {
-  it('先頭のフロントマターを除く', () => {
-    expect(stripFrontmatter('---\ntitle: a\n---\nbody')).toBe('body');
-    expect(stripFrontmatter('---\r\ntitle: a\r\n---\r\nbody')).toBe('body');
-  });
-
-  it('フロントマターが無ければそのまま返す', () => {
-    expect(stripFrontmatter('body\n---\nnot fm\n---\n')).toBe(
-      'body\n---\nnot fm\n---\n',
-    );
-  });
-
-  it('閉じ区切りが無ければそのまま返す', () => {
-    expect(stripFrontmatter('---\ntitle: a\nbody')).toBe('---\ntitle: a\nbody');
-  });
-});
 
 describe('hashBody', () => {
   it('フロントマターだけが違っても同じハッシュになる', () => {
     expect(hashBody('---\nupdated: 1\n---\nbody')).toBe(
       hashBody('---\nupdated: 2\ntags: x\n---\nbody'),
     );
+  });
+
+  it('フロントマターの無いファイルは全体を本文として扱う', () => {
+    expect(hashBody('body\n---\nnot fm\n---\n')).not.toBe(hashBody('body'));
   });
 
   it('本文が違えば別のハッシュになる', () => {

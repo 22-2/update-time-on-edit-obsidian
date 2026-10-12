@@ -16,6 +16,21 @@ export class Plugin {
   async saveData() {}
 }
 
+// 実体は Obsidian 内にあるため、先頭のフロントマターを正規表現で見つける簡易版で代用する
+export function getFrontMatterInfo(content: string) {
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(content);
+  if (!match) {
+    return { exists: false, frontmatter: '', from: 0, to: 0, contentStart: 0 };
+  }
+  return {
+    exists: true,
+    frontmatter: match[1],
+    from: content.indexOf('\n') + 1,
+    to: content.indexOf('\n') + 1 + match[1].length,
+    contentStart: match[0].length,
+  };
+}
+
 export class Notice {}
 export class TFile {}
 export class MarkdownView {}
