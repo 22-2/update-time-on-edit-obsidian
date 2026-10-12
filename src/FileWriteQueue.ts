@@ -1,5 +1,5 @@
 import PQueue from 'p-queue';
-import writeFileAtomic from 'write-file-atomic';
+import { writeFile } from 'atomically';
 import { debounce } from 'obsidian';
 
 interface QueuedWrite {
@@ -12,7 +12,7 @@ interface QueuedWrite {
  * FileWriteQueue はファイル書き込みをデバウンス＆直列化してFileLocked問題を緩和します。
  * - debounce：同一ファイルへの連続更新を短時間でまとめて1回の書き込みにする
  * - p-queue：複数ファイルの書き込みを concurrency=1 で直列化
- * - write-file-atomic：一時ファイル→rename で原子的に書き換える
+ * - atomically：一時ファイル→rename で原子的に書き換える
  */
 export class FileWriteQueue {
   private readonly queue = new PQueue({ concurrency: 1 });
@@ -59,9 +59,9 @@ export class FileWriteQueue {
    */
   private async writeFile(write: QueuedWrite): Promise<void> {
     try {
-      // write-file-atomic: 一時ファイル → rename で原子的に置き換え
+      // atomically: 一時ファイル → rename で原子的に置き換え
       // これにより Nextcloud 同期クライアントの部分読み込みロックを軽減
-      await writeFileAtomic(write.filePath, write.content, {
+      await writeFile(write.filePath, write.content, {
         encoding: write.encoding,
       });
     } catch (error) {
