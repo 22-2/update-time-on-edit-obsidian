@@ -41,6 +41,18 @@ function hashString(str: string): string {
 export function stripFrontmatter(content: string): string {
   return content.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '');
 }
+const FRONTMATTER_DELIMITER = /^---[ \t]*$/;
+/**
+ * 行の配列から、先頭のフロントマターを閉じる行の番号を返します
+ * フロントマターが無い、または閉じていない場合は null
+ */
+export function findFrontmatterEndLine(lines: string[]): number | null {
+  if (!FRONTMATTER_DELIMITER.test(lines[0] ?? '')) {
+    return null;
+  }
+  const end = lines.findIndex((line, i) => i > 0 && FRONTMATTER_DELIMITER.test(line));
+  return end === -1 ? null : end;
+}
 /**
  * 本文（フロントマター除く）のハッシュを返します
  * プロパティだけの変更で更新日時が動かないよう、比較にはこちらを使う

@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
+import { MarkdownView, Notice, Plugin, TFile } from 'obsidian';
 import {
   DEFAULT_SETTINGS,
   type UpdateTimeOnEditSettings,
@@ -7,6 +7,7 @@ import {
 import {
   formatDate,
   getActiveFile,
+  findFrontmatterEndLine,
   hashBody,
   isExcalidrawFile,
   isPathIgnored,
@@ -427,48 +428,26 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private shouldSkipWhenCursorInFrontmatter(file: TFile): boolean {
-      // Check if we should skip frontmatter update when cursor is in frontmatter
-      if (!this.settings.skipFrontmatterWhenCursorInFrontmatter) {
+    if (!this.settings.skipFrontmatterWhenCursorInFrontmatter) {
       return false;
     }
-    const activeFile = getActiveFile(this.app);
-    if (activeFile?.path !== file.path) {
+    if (getActiveFile(this.app)?.path !== file.path) {
       return false;
     }
     const editor = this.app.workspace.activeEditor?.editor;
     if (!editor) {
       return false;
     }
-    const cursorPos = editor.getCursor();
-    const cursorAfterFrontmatter = this.getCursorAfterFrontmatter(editor);
-    
-    // Skip update if cursor is before contentStart (i.e., in frontmatter)
-    if (cursorAfterFrontmatter && cursorPos.line < cursorAfterFrontmatter.line) {
+
+    // metadataCache の位置は入力中に古い値を返し得るため、エディターの今の内容から判定する
+    const lines = editor.getValue().split(/\r?\n/);
+    const frontmatterEndLine = findFrontmatterEndLine(lines);
+    if (frontmatterEndLine !== null && editor.getCursor().line <= frontmatterEndLine) {
       this.log('Skipping frontmatter update because cursor is in frontmatter area');
       return true;
     }
 
     return false;
-  }
-
-  private getCursorAfterFrontmatter(editor: Editor): { line: number; ch: number } | null {
-    const content = editor.getValue();
-    const lines = content.split('\n');
-    
-    // Check if file starts with frontmatter
-    if (!lines[0].startsWith('---')) {
-      return { line: 0, ch: 0 };
-    }
-
-    // Find the closing frontmatter delimiter
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].startsWith('---')) {
-        return { line: i + 1, ch: 0 };
-      }
-    }
-
-    // No closing delimiter found
-    return null;
   }
 
   private updateFrontmatterFields(frontmatter: FrontMatter, file: TFile): void {

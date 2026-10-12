@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterIgnoredFolders,
+  findFrontmatterEndLine,
   groupByCommonPrefix,
   hashBody,
   isPathIgnored,
@@ -21,6 +22,30 @@ describe('stripFrontmatter', () => {
 
   it('閉じ区切りが無ければそのまま返す', () => {
     expect(stripFrontmatter('---\ntitle: a\nbody')).toBe('---\ntitle: a\nbody');
+  });
+});
+
+describe('findFrontmatterEndLine', () => {
+  it('閉じ区切りの行番号を返す', () => {
+    expect(findFrontmatterEndLine(['---', 'a: 1', '---', 'body'])).toBe(2);
+    expect(findFrontmatterEndLine(['---', '---'])).toBe(1);
+    expect(findFrontmatterEndLine(['--- ', 'a: 1', '---\t', 'body'])).toBe(2);
+  });
+
+  it('フロントマターが無ければ null', () => {
+    expect(findFrontmatterEndLine(['body', '---'])).toBeNull();
+    expect(findFrontmatterEndLine([''])).toBeNull();
+  });
+
+  it('閉じていなければ null', () => {
+    expect(findFrontmatterEndLine(['---', 'a: 1', 'body'])).toBeNull();
+  });
+
+  it('水平線や ---foo は区切りと見なさない', () => {
+    expect(findFrontmatterEndLine(['----', 'a: 1', '---'])).toBeNull();
+    expect(findFrontmatterEndLine(['---foo', 'a: 1', '---'])).toBeNull();
+    expect(findFrontmatterEndLine(['---', 'a: 1', '----', '---foo', 'body'])).toBeNull();
+    expect(findFrontmatterEndLine(['---', 'a: 1', '----', '---'])).toBe(3);
   });
 });
 
