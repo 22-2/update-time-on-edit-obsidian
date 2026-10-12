@@ -101,7 +101,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on('modify', this.createActiveFileGuard((file) => {
         this.log('TRIGGER FROM MODIFY');
-        this.scheduleIdleUpdate(file, 'modify');
+        this.scheduleIdleUpdate(file);
       })),
     );
   }
@@ -118,7 +118,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
         if (this.pendingUpdateTimers.has(file.path)) {
           this.log('RESCHEDULE BECAUSE EDITING');
-          this.scheduleIdleUpdate(file, 'modify');
+          this.scheduleIdleUpdate(file);
         }
       }),
     );
@@ -253,10 +253,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
   }
 
-  private scheduleIdleUpdate(
-    file: TFile,
-    triggerSource: 'modify' | 'bulk',
-  ): void {
+  private scheduleIdleUpdate(file: TFile): void {
     this.clearPendingUpdate(file.path);
 
     const timerId = window.setTimeout(() => {
@@ -264,7 +261,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
       if (this.isFileBeingEdited(file.path)) {
         this.log('EDITING IN PROGRESS, DELAYING UPDATE');
-        this.scheduleIdleUpdate(file, triggerSource);
+        this.scheduleIdleUpdate(file);
         return;
       }
 
@@ -275,7 +272,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
         return;
       }
 
-      void this.handleFileChange(file, triggerSource);
+      void this.handleFileChange(file);
     }, this.DEBOUNCE_DELAY_MS);
 
     this.pendingUpdateTimers.set(file.path, timerId);
@@ -379,35 +376,14 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     return isPathIgnored(path, ignorePatterns);
   }
 
-  // Returns normalized list of folders to ignore (handles legacy string setting)
-  public getIgnoreFolders(): string[] {
-    return normalizeIgnoreFolders(this.settings.ignoreGlobalFolder);
-  }
-
   // ==================== File Processing ====================
 
-  async getAllFilesPossiblyAffected(): Promise<TFile[]> {
-    const allFiles = this.app.vault.getMarkdownFiles();
-    const result: TFile[] = [];
-
-    for (const file of allFiles) {
-      if (!(await this.shouldFileBeIgnored(file))) {
-        result.push(file);
-      }
-    }
-
-    return result;
-  }
-
-  async handleFileChange(
-    file: TAbstractFile,
-    triggerSource: 'modify' | 'bulk',
-  ): Promise<FileChangeResult> {
+  async handleFileChange(file: TAbstractFile): Promise<FileChangeResult> {
     if (!isTFile(file)) {
       return { status: 'ignored' };
     }
 
-    if (triggerSource === 'modify' && !this.isValidActiveFile(file)) {
+    if (!this.isValidActiveFile(file)) {
       return { status: 'ignored' };
     }
 
@@ -416,12 +392,12 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
 
     // 内容の読み取りを待つ間にフォーカスが変わる場合もある。
-    if (triggerSource === 'modify' && !this.isValidActiveFile(file)) {
+    if (!this.isValidActiveFile(file)) {
       return { status: 'ignored' };
     }
 
     try {
-      await this.updateFileFrontmatter(file, triggerSource);
+      await this.updateFileFrontmatter(file);
       await this.populateCacheForFile(file);
       return { status: 'ok' };
     } catch (e: unknown) {
@@ -432,10 +408,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
   }
 
-  private async updateFileFrontmatter(
-    file: TFile,
-    triggerSource: 'modify' | 'bulk',
-  ): Promise<void> {
+  private async updateFileFrontmatter(file: TFile): Promise<void> {
     if (this.shouldSkipWhenCursorInFrontmatter(file)) {
       // 編集中でもファイル内容のキャッシュは最新に保ちたい
       return;
@@ -445,7 +418,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       file,
       (frontmatter) => {
         // processFrontMatter 内の非同期読み取り後にも書き込み条件を確認する。
-        if (triggerSource === 'modify' && !this.isValidActiveFile(file)) {
+        if (!this.isValidActiveFile(file)) {
           // コールバックを抜けるだけでは再保存され得るため、処理自体を中断する。
           throw new UpdateCancelledError();
         }

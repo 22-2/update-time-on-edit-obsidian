@@ -98,8 +98,7 @@ describe('自動更新の対象とフォーカス', () => {
   ])('vault に登録された外部ファイルも除外する: %s', async (path) => {
     const s = await setup(path);
     s.input();
-    expect(await s.plugin.handleFileChange(s.file, 'modify')).toEqual({ status: 'ignored' });
-    expect(await s.plugin.handleFileChange(s.file, 'bulk')).toEqual({ status: 'ignored' });
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
     expect(s.vault.read).not.toHaveBeenCalled();
     expect(s.processFrontMatter).not.toHaveBeenCalled();
     s.plugin.settings.enableExperimentalHash = true;
@@ -143,7 +142,7 @@ describe('自動更新の対象とフォーカス', () => {
       s.doc.hasFocus.mockReturnValue(false);
       return 'body';
     });
-    expect(await s.plugin.handleFileChange(s.file, 'modify')).toEqual({ status: 'ignored' });
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
     expect(s.processFrontMatter).not.toHaveBeenCalled();
   });
 
@@ -154,7 +153,7 @@ describe('自動更新の対象とフォーカス', () => {
       s.doc.hasFocus.mockReturnValue(false);
       callback(s.frontmatter);
     });
-    expect(await s.plugin.handleFileChange(s.file, 'modify')).toEqual({ status: 'ignored' });
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
     expect(s.frontmatter).toEqual({});
     expect(s.vault.read).toHaveBeenCalledOnce();
   });
@@ -164,7 +163,7 @@ describe('自動更新の対象とフォーカス', () => {
     s.doc.hasFocus.mockReturnValue(false);
     s.input();
     s.doc.hasFocus.mockReturnValue(true);
-    expect(await s.plugin.handleFileChange(s.file, 'modify')).toEqual({ status: 'ignored' });
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
     expect(s.processFrontMatter).not.toHaveBeenCalled();
   });
 
@@ -184,7 +183,7 @@ describe('自動更新の対象とフォーカス', () => {
     s.workspace.activeLeaf.view.containerEl.ownerDocument = popupDocument;
     s.emit(s.workspace, 'window-open', {}, { document: popupDocument });
     s.input(popupDocument);
-    expect(await s.plugin.handleFileChange(s.file, 'modify')).toEqual({ status: 'ok' });
+    expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ok' });
     expect(s.frontmatter.updated).toBeDefined();
   });
 

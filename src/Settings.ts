@@ -1,6 +1,5 @@
 import { App, PluginSettingTab, Setting, type SettingDefinitionItem } from 'obsidian';
 import UpdateTimeOnSavePlugin from './main';
-import { UpdateAllCacheData } from './UpdateAllCacheData';
 import { IgnoreRulesModal } from './IgnoreRulesModal';
 import { moment } from './utils';
 
@@ -129,15 +128,6 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
             },
           },
           {
-            name: 'Initial cache',
-            desc: 'Stores the current content of existing files as the baseline for the hash matcher.',
-            render: (setting) => {
-              setting.addButton((btn) =>
-                btn.setButtonText('Fill initial cache').onClick(() => this.openInitialCacheModal()),
-              );
-            },
-          },
-          {
             name: 'Skip frontmatter update while editing frontmatter',
             desc: 'When enabled, frontmatter will not be updated if the cursor is inside the frontmatter area (before content starts).',
             control: {
@@ -175,10 +165,6 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
         await this.saveSettings();
       },
     }).open();
-  }
-
-  openInitialCacheModal(): void {
-    new UpdateAllCacheData(this.app, this.plugin).open();
   }
 
   // 日付形式は入力に応じて説明文の「Currently」を更新するため、行ごと描画する
