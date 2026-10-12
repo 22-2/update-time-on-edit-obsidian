@@ -8,18 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@popperjs/core':
-        specifier: 2.11.8
-        version: 2.11.8
       atomically:
         specifier: ^2.1.1
         version: 2.1.1
       common-path-prefix:
         specifier: 3.0.0
         version: 3.0.0
-      date-fns:
-        specifier: 4.1.0
-        version: 4.1.0
       ignore:
         specifier: 7.0.5
         version: 7.0.5
@@ -584,9 +578,6 @@ packages:
 
   '@pixi/utils@7.2.4':
     resolution: {integrity: sha512-VUGQHBOINIS4ePzoqafwxaGPVRTa3oM/mEutIIHbNGI3b+QvSO+1Dnk40M0zcH6Bo+MxQZbOZK5X/wO9oU5+LQ==}
-
-  '@popperjs/core@2.11.8':
-    resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
   '@rollup/rollup-android-arm-eabi@4.57.1':
     resolution: {integrity: sha512-A6ehUVSiSaaliTxai040ZpZ2zTevHYbvu/lDoeAteHI8QnaosIzm4qwtezfRg1jOYaUmnzLX1AOD6Z+UJjtifg==}
@@ -1201,9 +1192,6 @@ packages:
 
   dagre-d3-es@7.0.11:
     resolution: {integrity: sha512-tvlJLyQf834SylNKax8Wkzco/1ias1OPw8DcUMDE7oUIoSEW25riQVuiu/0OWEFqT0cxHT3Pa9/D82Jr47IONw==}
-
-  date-fns@4.1.0:
-    resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
 
   dayjs@1.11.19:
     resolution: {integrity: sha512-t5EcLVS6QPBNqM2z8fakk/NKel+Xzshgt8FFKAn+qwlD1pzZWxh0nVCrvFK7ZDb6XucZeF9z8C7CBWTRIVApAw==}
@@ -2518,8 +2506,6 @@ snapshots:
       eventemitter3: 4.0.7
       url: 0.11.4
 
-  '@popperjs/core@2.11.8': {}
-
   '@rollup/rollup-android-arm-eabi@4.57.1':
     optional: true
 
@@ -3152,8 +3138,6 @@ snapshots:
     dependencies:
       d3: 7.9.0
       lodash-es: 4.17.23
-
-  date-fns@4.1.0: {}
 
   dayjs@1.11.19: {}
 
