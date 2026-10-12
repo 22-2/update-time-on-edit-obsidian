@@ -1,10 +1,8 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import UpdateTimeOnSavePlugin from './main';
-declare const moment: any;
-import { UpdateAllModal } from './UpdateAllModal';
 import { UpdateAllCacheData } from './UpdateAllCacheData';
 import { IgnoreRulesModal } from './IgnoreRulesModal';
-import { normalizeIgnoreFolders } from './utils';
+import { moment } from './utils';
 
 export interface UpdateTimeOnEditSettings {
   dateFormat: string;
@@ -47,7 +45,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'Global settings' });
+    new Setting(containerEl).setName('Global settings').setHeading();
 
     this.addExcludedFoldersSetting();
     this.addTimeBetweenUpdates();
@@ -64,16 +62,16 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     //     });
     //   });
 
-    containerEl.createEl('h2', { text: 'Updated at' });
+    new Setting(containerEl).setName('Updated at').setHeading();
 
     this.addFrontMatterUpdated();
 
-    containerEl.createEl('h2', { text: 'Created at' });
+    new Setting(containerEl).setName('Created at').setHeading();
 
     this.addEnableCreated();
     this.addFrontMatterCreated();
 
-    containerEl.createEl('h2', { text: 'Experimental settings' });
+    new Setting(containerEl).setName('Experimental settings').setHeading();
 
     new Setting(this.containerEl)
       .setName('Enable hash matcher')
@@ -118,7 +116,7 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
     setValue,
   }: DateFormatArgs) {
     const createDoc = () => {
-      const descr = document.createDocumentFragment();
+      const descr = createFragment();
       descr.append(
         description,
         descr.createEl('br'),

@@ -18,3 +18,7 @@ export class Plugin {
 
 export class Notice {}
 export const debounce = (callback: () => void) => callback;
+
+// テストごとに vi.stubGlobal('moment', ...) で差し替えられるよう、呼び出し時に解決する
+type MomentLike = (...args: unknown[]) => unknown;
+export const moment = (...args: unknown[]) => (globalThis as unknown as { moment: MomentLike }).moment(...args);

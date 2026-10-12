@@ -1,8 +1,22 @@
-declare const moment: any;
 import ignore from 'ignore';
 import commonPathPrefix from 'common-path-prefix';
 import { sha256 } from 'js-sha256';
-import { App, TAbstractFile, TFile } from 'obsidian';
+import { App, moment as obsidianMoment, TAbstractFile, TFile } from 'obsidian';
+
+interface MomentInstance {
+  isValid(): boolean;
+  toDate(): Date;
+  format(format: string): string;
+  add(amount: number, unit: 'minutes'): MomentInstance;
+  isAfter(input: Date): boolean;
+}
+
+type MomentFactory = (input?: Date | number | string, format?: string, strict?: boolean) => MomentInstance;
+
+export type DateValue = number | string | Date;
+
+// obsidian の型定義は moment の名前空間を指し関数として呼べないため、使う範囲の型を与える
+export const moment = obsidianMoment as unknown as MomentFactory;
 
 function onlyUniqueArray<T>(value: T, index: number, self: T[]) {
   return self.indexOf(value) === index;
@@ -46,7 +60,10 @@ export function hashBody(content: string): string {
 /**
  * 日付をパースします
  */
-export function parseDate(input: number | string, dateFormat: string): Date | undefined {
+export function parseDate(input: DateValue | undefined, dateFormat: string): Date | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
   if (typeof input === 'string') {
     try {
       let m = moment(input, dateFormat, true);
@@ -84,13 +101,17 @@ export function shouldUpdateValue(
  * Excalidrawファイルかどうかを判定します
  */
 export function isExcalidrawFile(file: TFile): boolean {
-  const ea: any =
-    //@ts-expect-error this is comming from global context, injected by Excalidraw
-    typeof ExcalidrawAutomate === 'undefined'
-      ? undefined
-      : //@ts-expect-error this is comming from global context, injected by Excalidraw
-      ExcalidrawAutomate; //ea will be undefined if the Excalidraw plugin is not running
+  const ea = getExcalidrawAutomate();
   return ea ? ea.isExcalidrawFile(file) : false;
+}
+
+interface ExcalidrawAutomateLike {
+  isExcalidrawFile(file: TFile): boolean;
+}
+
+// Excalidraw プラグインが起動していない場合は undefined になる
+function getExcalidrawAutomate(): ExcalidrawAutomateLike | undefined {
+  return (window as Window & { ExcalidrawAutomate?: ExcalidrawAutomateLike }).ExcalidrawAutomate;
 }
 /**
  * 無視フォルダー設定を正規化します

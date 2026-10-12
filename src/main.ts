@@ -15,11 +15,22 @@ import {
   normalizeIgnoreFolders,
   parseDate,
   shouldUpdateValue,
+  type DateValue,
 } from './utils';
 
 interface FileChangeResult {
   status: 'ok' | 'error' | 'ignored';
-  error?: any;
+  error?: unknown;
+}
+
+type FrontMatter = Record<string, unknown>;
+
+// frontmatter の値のうち、日付として解釈できる型だけを取り出す
+function toDateValue(value: unknown): DateValue | undefined {
+  if (value instanceof Date || typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+  return undefined;
 }
 
 class UpdateCancelledError extends Error {}
@@ -413,7 +424,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       await this.updateFileFrontmatter(file, triggerSource);
       await this.populateCacheForFile(file);
       return { status: 'ok' };
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e instanceof UpdateCancelledError) {
         return { status: 'ignored' };
       }
@@ -438,7 +449,8 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
           // コールバックを抜けるだけでは再保存され得るため、処理自体を中断する。
           throw new UpdateCancelledError();
         }
-        this.updateFrontmatterFields(frontmatter, file);
+        // Obsidian はフロントマターを常にオブジェクトとして渡す
+        this.updateFrontmatterFields(frontmatter as FrontMatter, file);
       },
       { ctime: file.stat.ctime, mtime: file.stat.mtime },
     );
@@ -489,7 +501,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     return null;
   }
 
-  private updateFrontmatterFields(frontmatter: any, file: TFile): void {
+  private updateFrontmatterFields(frontmatter: FrontMatter, file: TFile): void {
     this.log('current metadata: ', frontmatter);
     this.log('current stat: ', file.stat);
 
@@ -510,7 +522,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     };
   }
 
-  private updateCreatedField(frontmatter: any, filePath: string, cTime: Date): void {
+  private updateCreatedField(frontmatter: FrontMatter, filePath: string, cTime: Date): void {
     const createdKey = this.settings.headerCreated;
 
     if (!frontmatter[createdKey] && !this.shouldIgnoreCreated(filePath)) {
@@ -521,10 +533,10 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
   }
 
-  private updateModifiedField(frontmatter: any, mTime: Date): void {
+  private updateModifiedField(frontmatter: FrontMatter, mTime: Date): void {
     const updatedKey = this.settings.headerUpdated;
     const currentMTimeOnFile = parseDate(
-      frontmatter[updatedKey],
+      toDateValue(frontmatter[updatedKey]),
       this.settings.dateFormat,
     );
 
@@ -557,8 +569,8 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     );
   }
 
-  private handleProcessingError(error: any, file: TFile): FileChangeResult {
-    if (error?.name === 'YAMLParseError') {
+  private handleProcessingError(error: unknown, file: TFile): FileChangeResult {
+    if (error instanceof Error && error.name === 'YAMLParseError') {
       const errorMessage = `Update time on edit failed
 Malformed frontmatter on this file: ${file.path}
 
@@ -605,7 +617,7 @@ ${error.message}`;
 
   // ==================== Utilities ====================
 
-  private log(...data: any[]): void {
+  private log(...data: unknown[]): void {
     if (!this.settings.debugLogging) {
       return;
     }

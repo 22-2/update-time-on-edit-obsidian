@@ -135,14 +135,14 @@ export class IgnoreRulesModal extends Modal {
   }
 
   private createPlaceholderElement(text: string): HTMLElement {
-    const el = document.createElement('div');
+    const el = createDiv();
     el.addClass('setting-item-description');
     el.setText(text);
     return el;
   }
 
   private createTextElement(text: string, className?: string): HTMLElement {
-    const el = document.createElement('div');
+    const el = createDiv();
     if (className) {
       el.addClass(className);
     }

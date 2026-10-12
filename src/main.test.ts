@@ -74,7 +74,11 @@ async function setup(path = 'note.md') {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.stubGlobal('window', globalThis);
+  // テスト環境には window が無いため、タイマーだけを持つ window を差し込む（フェイクタイマーに追従させる）
+  vi.stubGlobal('window', {
+    setTimeout: (callback: () => void, ms?: number) => setTimeout(callback, ms),
+    clearTimeout: (id?: ReturnType<typeof setTimeout>) => clearTimeout(id),
+  });
   vi.stubGlobal('moment', (value: number) => ({ format: () => new Date(value).toISOString() }));
   domHandlers.length = 0;
 });

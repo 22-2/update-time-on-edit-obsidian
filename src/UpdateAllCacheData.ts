@@ -2,12 +2,12 @@ import { App, ButtonComponent, Modal, Notice, Setting } from 'obsidian';
 import UpdateTimeOnSavePlugin from './main';
 
 const createTextSpan = (text: string): HTMLSpanElement => {
-  const textSpan = document.createElement('span');
+  const textSpan = createSpan();
   textSpan.setText(text);
   return textSpan;
 };
 
-const createBr = () => document.createElement('br');
+const createBr = () => createEl('br');
 
 export class UpdateAllCacheData extends Modal {
   plugin: UpdateTimeOnSavePlugin;
@@ -29,10 +29,10 @@ export class UpdateAllCacheData extends Modal {
       return;
     }
     const allMdFiles = await this.plugin.getAllFilesPossiblyAffected();
-    const progress = document.createElement('progress');
+    const progress = createEl('progress');
     progress.setAttr('max', allMdFiles.length);
 
-    const fileCounter = document.createElement('span');
+    const fileCounter = createSpan();
 
     const updateCount = (count: number) => {
       progress.setAttr('value', count);
@@ -40,7 +40,7 @@ export class UpdateAllCacheData extends Modal {
     };
     updateCount(0);
 
-    const wrapperBar = document.createElement('div');
+    const wrapperBar = createDiv();
     wrapperBar.append(progress, fileCounter);
     wrapperBar.addClass('progress-section');
 
