@@ -145,7 +145,7 @@ describe('自動更新の対象とフォーカス', () => {
       return 'body';
     });
     expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
-    expect(s.processFrontMatter).not.toHaveBeenCalled();
+    expect(s.frontmatter).toEqual({});
   });
 
   it('プロパティ変更直前にフォーカスが外れたら書き換えない', async () => {

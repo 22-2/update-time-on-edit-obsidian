@@ -385,16 +385,12 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   // ==================== File Processing ====================
 
   async handleFileChange(file: TFile): Promise<FileChangeResult> {
+    // 読み取りの間に条件が変わっても、書き込み直前に processFrontMatter 内で再確認する
     if (!this.isValidActiveFile(file)) {
       return { status: 'ignored' };
     }
 
     if (await this.shouldFileBeIgnored(file)) {
-      return { status: 'ignored' };
-    }
-
-    // 内容の読み取りを待つ間にフォーカスが変わる場合もある。
-    if (!this.isValidActiveFile(file)) {
       return { status: 'ignored' };
     }
 
