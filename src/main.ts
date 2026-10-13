@@ -8,6 +8,7 @@ import { BaselineStore } from './baseline';
 import { isInvalidFile } from './filter';
 import { applyTimestamps, isCursorInFrontmatter, type FrontMatter } from './frontmatter';
 import { UserInputTracker } from './input';
+import { migrateLoadedData, type LoadedData } from './migration';
 import {
   getActiveFile,
   isExcalidrawFile,
@@ -19,10 +20,6 @@ interface FileChangeResult {
   status: 'ok' | 'error' | 'ignored';
   error?: unknown;
 }
-
-// 旧版が data.json に保存していた項目。ハッシュは今はメモリにだけ持ち、照合は常に有効なので、読み込み時に捨てる
-const LEGACY_KEYS = ['fileHashMap', 'enableExperimentalHash'] as const;
-type LoadedData = Partial<UpdateTimeOnEditSettings> & Partial<Record<(typeof LEGACY_KEYS)[number], unknown>>;
 
 class UpdateCancelledError extends Error {}
 
@@ -87,13 +84,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   // ==================== Settings ====================
 
   async loadSettings(): Promise<void> {
-    const loaded = (await this.loadData()) as LoadedData | null;
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-    const legacyKeys = LEGACY_KEYS.filter((key) => loaded && key in loaded);
-    if (legacyKeys.length > 0) {
-      for (const key of legacyKeys) {
-        delete (this.settings as LoadedData)[key];
-      }
+    const { settings, needsSave } = migrateLoadedData((await this.loadData()) as LoadedData | null, DEFAULT_SETTINGS);
+    this.settings = settings;
+    if (needsSave) {
       await this.saveSettings();
     }
   }

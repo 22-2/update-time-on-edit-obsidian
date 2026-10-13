@@ -67,6 +67,9 @@
   - `frontmatter.ts`：created / updated の書き込み（`applyTimestamps`。Obsidian に依存しない純粋な関数）
   - `baseline.ts`：本文ハッシュの基準（`BaselineStore`）
   - `input.ts`：ユーザー入力の追跡（`UserInputTracker`）
+  - `filter.ts`：更新の対象にならないファイルの判定（`isInvalidFile`）
+  - `migration.ts`：読み込んだ設定への既定値の重ね合わせと、旧版の項目の削除
+  - カーソルがフロントマター内かの判定（`isCursorInFrontmatter`）は `frontmatter.ts` に置いた
   - `main.ts` には、イベントの配線、対象ファイルの判定、更新の予約と流れだけを残した
 - 日付操作・ユーティリティを `src/utils.ts` に集約
 - **使用していない設定の削除**
