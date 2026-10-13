@@ -11,7 +11,6 @@ vi.mock('./Settings', () => ({
     headerCreated: 'created',
     minMinutesBetweenSaves: 1,
     ignoreGlobalFolder: [],
-    enableExperimentalHash: false,
     skipFrontmatterWhenCursorInFrontmatter: false,
   },
   UpdateTimeOnEditSettingsTab: class {},
@@ -103,7 +102,6 @@ describe('自動更新の対象とフォーカス', () => {
     expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ignored' });
     expect(s.vault.read).not.toHaveBeenCalled();
     expect(s.processFrontMatter).not.toHaveBeenCalled();
-    s.plugin.settings.enableExperimentalHash = true;
     s.emit(s.workspace, 'file-open', s.file);
     await vi.runAllTimersAsync();
     expect(s.vault.read).not.toHaveBeenCalled();
@@ -213,7 +211,6 @@ describe('自動更新の対象とフォーカス', () => {
 
 describe('本文ハッシュの基準', () => {
   const openFile = async (s: Awaited<ReturnType<typeof setup>>) => {
-    s.plugin.settings.enableExperimentalHash = true;
     s.emit(s.workspace, 'file-open', s.file);
     await vi.advanceTimersByTimeAsync(0);
   };
@@ -286,25 +283,24 @@ describe('本文ハッシュの基準', () => {
     s.input();
     expect(await s.plugin.handleFileChange(s.file)).toEqual({ status: 'ok' });
   });
-
-  it('ハッシュ照合を無効にすると基準を記録しない', async () => {
-    const s = await setup();
-    s.emit(s.workspace, 'file-open', s.file);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(s.vault.read).not.toHaveBeenCalled();
-  });
 });
 
 describe('旧版の設定の移行', () => {
-  it('読み込んだデータに fileHashMap があれば削除して保存する', async () => {
-    const s = await setup('note.md', { headerUpdated: 'modified', fileHashMap: { 'a.md': 'x' } });
+  it('読み込んだデータに旧版の項目があれば削除して保存する', async () => {
+    const s = await setup('note.md', {
+      headerUpdated: 'modified',
+      fileHashMap: { 'a.md': 'x' },
+      enableExperimentalHash: false,
+    });
     expect(s.plugin.settings).not.toHaveProperty('fileHashMap');
+    expect(s.plugin.settings).not.toHaveProperty('enableExperimentalHash');
     expect(s.plugin.settings.headerUpdated).toBe('modified');
     expect(s.saveData).toHaveBeenCalledOnce();
     expect(s.saveData.mock.calls[0][0]).not.toHaveProperty('fileHashMap');
+    expect(s.saveData.mock.calls[0][0]).not.toHaveProperty('enableExperimentalHash');
   });
 
-  it('fileHashMap が無ければ保存しない', async () => {
+  it('旧版の項目が無ければ保存しない', async () => {
     const s = await setup();
     expect(s.saveData).not.toHaveBeenCalled();
   });

@@ -12,7 +12,6 @@ export interface UpdateTimeOnEditSettings {
   // Union because of legacy
   ignoreGlobalFolder?: string | string[];
 
-  enableExperimentalHash?: boolean;
   skipFrontmatterWhenCursorInFrontmatter?: boolean;
   debugLogging?: boolean;
 }
@@ -24,7 +23,6 @@ export const DEFAULT_SETTINGS: UpdateTimeOnEditSettings = {
   headerCreated: 'created',
   minMinutesBetweenSaves: 1,
   ignoreGlobalFolder: [],
-  enableExperimentalHash: true,
   skipFrontmatterWhenCursorInFrontmatter: true,
   debugLogging: false,
 };
@@ -114,17 +112,8 @@ export class UpdateTimeOnEditSettingsTab extends PluginSettingTab {
       },
       {
         type: 'group',
-        heading: 'Experimental',
+        heading: 'Advanced',
         items: [
-          {
-            name: 'Enable hash matcher',
-            desc: 'Compares the body (front matter excluded) with its content when the file was opened or last synced, and skips the update if it has not changed. Prevents needless updates from sync or property-only edits.',
-            control: {
-              type: 'toggle',
-              key: 'enableExperimentalHash',
-              defaultValue: true,
-            },
-          },
           {
             name: 'Skip frontmatter update while editing frontmatter',
             desc: 'When enabled, frontmatter will not be updated if the cursor is inside the frontmatter area (before content starts).',

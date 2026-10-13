@@ -8,8 +8,8 @@ test.use({
     plugins: [
       {
         path: PLUGIN_DIR,
-        // fileHashMap は旧版が保存していたもの。読み込み時に取り除かれる
-        data: { ignoreGlobalFolder: ['ignored/'], fileHashMap: { 'old.md': 'deadbeef' } },
+        // fileHashMap・enableExperimentalHash は旧版の項目。読み込み時に取り除かれる
+        data: { ignoreGlobalFolder: ['ignored/'], fileHashMap: { 'old.md': 'deadbeef' }, enableExperimentalHash: false },
       },
     ],
   },
@@ -19,10 +19,11 @@ test.beforeEach(async ({ obsidian }) => {
   await preparePlugin(obsidian);
 });
 
-test('旧版の fileHashMap は読み込み時に data.json から取り除かれる', async ({ obsidian }) => {
+test('旧版の項目は読み込み時に data.json から取り除かれる', async ({ obsidian }) => {
   await expect
     .poll(async () => (await obsidian.pluginData(PLUGIN_ID)) ?? {})
     .not.toHaveProperty('fileHashMap');
+  expect(await obsidian.pluginData(PLUGIN_ID)).not.toHaveProperty('enableExperimentalHash');
   expect(await obsidian.pluginData(PLUGIN_ID)).toMatchObject({ ignoreGlobalFolder: ['ignored/'] });
 });
 

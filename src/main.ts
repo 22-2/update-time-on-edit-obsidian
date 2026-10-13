@@ -23,8 +23,9 @@ interface FileChangeResult {
 
 type FrontMatter = Record<string, unknown>;
 
-// 旧版が data.json に保存していたハッシュ。今はメモリにだけ持つので、読み込み時に捨てる
-type LoadedData = Partial<UpdateTimeOnEditSettings> & { fileHashMap?: unknown };
+// 旧版が data.json に保存していた項目。ハッシュは今はメモリにだけ持ち、照合は常に有効なので、読み込み時に捨てる
+const LEGACY_KEYS = ['fileHashMap', 'enableExperimentalHash'] as const;
+type LoadedData = Partial<UpdateTimeOnEditSettings> & Partial<Record<(typeof LEGACY_KEYS)[number], unknown>>;
 
 // frontmatter の値のうち、日付として解釈できる型だけを取り出す
 function toDateValue(value: unknown): DateValue | undefined {
@@ -99,8 +100,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const loaded = (await this.loadData()) as LoadedData | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-    if (loaded && 'fileHashMap' in loaded) {
-      delete (this.settings as LoadedData).fileHashMap;
+    const legacyKeys = LEGACY_KEYS.filter((key) => loaded && key in loaded);
+    if (legacyKeys.length > 0) {
+      for (const key of legacyKeys) {
+        delete (this.settings as LoadedData)[key];
+      }
       await this.saveSettings();
     }
   }
@@ -156,9 +160,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
    * 記録が無いと、未編集でも最初の保存で必ず更新対象になってしまうため。
    */
   private async ensureBaseline(file: TFile): Promise<void> {
-    if (!this.settings.enableExperimentalHash) {
-      return;
-    }
     if (this.isInvalidFile(file) || this.baselineHashes.has(file.path)) {
       return;
     }
@@ -166,10 +167,9 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private async refreshBaselineIfTracked(file: TFile): Promise<void> {
-    if (!this.settings.enableExperimentalHash || !this.baselineHashes.has(file.path)) {
-      return;
+    if (this.baselineHashes.has(file.path)) {
+      await this.recordBaseline(file);
     }
-    await this.recordBaseline(file);
   }
 
   private setupRenameHandler(): void {
@@ -349,10 +349,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private isFileUnchanged(file: TFile, fileContent: string): boolean {
-    if (!this.settings.enableExperimentalHash) {
-      return false;
-    }
-
     const baselineHash = this.baselineHashes.get(file.path);
     if (!baselineHash) {
       return false;
@@ -522,9 +518,6 @@ ${error.message}`;
   // ==================== Baseline Management ====================
 
   private async recordBaseline(file: TFile): Promise<void> {
-    if (!this.settings.enableExperimentalHash) {
-      return;
-    }
     const fileContent = await this.getFileContent(file);
     if (!fileContent) {
       return;

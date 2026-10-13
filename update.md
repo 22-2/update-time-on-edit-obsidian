@@ -10,7 +10,8 @@
 - 本文のハッシュ（`fileHashMap`）を `data.json` に保存するのをやめ、メモリ上の `Map`（`baselineHashes`）だけで持つ
   - 設定ファイルがファイル数に比例して大きくなることと、同期での FileLocked・競合の原因が無くなる
   - 基準は、ファイルを開いた時（起動時に復元されたタブも `file-open` で拾える）・外部からの編集・更新の成功後に記録する
-  - 旧版の `data.json` に残った `fileHashMap` は、読み込み時に一度だけ削除する
+  - 旧版の `data.json` に残った `fileHashMap` と `enableExperimentalHash` は、読み込み時に一度だけ削除する
+  - 設定「Enable hash matcher」を削除した（メモリだけになったので切る理由が無く、常に有効）
 - 使われていなかった一括更新モーダルと「Fill initial cache」を削除
 - ファイル書き込みを直列化する `FileWriteQueue` を試作したが、実際の書き込みは
   `processFrontMatter` が行っており未使用だったため削除した
