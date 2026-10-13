@@ -31,7 +31,7 @@ export function shortenWaits(obsidian: ObsidianAPI): Promise<void> {
       .plugins[pluginId];
     if (!plugin) throw new Error(`${pluginId} が読み込まれていません`);
     plugin.DEBOUNCE_DELAY_MS = 300;
-    plugin.EDIT_IDLE_DELAY_MS = 200;
+    (plugin.userInput as { idleMs: number }).idleMs = 200;
   }, PLUGIN_ID);
 }
 

@@ -6,6 +6,7 @@ import {
 } from './Settings';
 import { BaselineStore } from './baseline';
 import { applyTimestamps, type FrontMatter } from './frontmatter';
+import { UserInputTracker } from './input';
 import {
   getActiveFile,
   isExcalidrawFile,
@@ -38,7 +39,7 @@ class UpdateCancelledError extends Error {}
  *      alangrainger/obsidian-frontmatter-modified-date が別途「typing events」モード
  *      （CodeMirror でユーザー入力だけを拾う）を持つのも同じ理由と思われる
  *    → 「ユーザー入力があったか」は DOM の beforeinput / keydown で別に追跡する
- *      （setupUserInputTracking。貼り付けも beforeinput で拾える）
+ *      （UserInputTracker。貼り付けも beforeinput で拾える）
  *
  * 2. 同期クライアントはファイルの mtime や改行コードだけを変えることがある
  *    - modify は内容が変わらなくても発火し、複数端末で更新日時を書き合う往復が起きる
@@ -49,7 +50,7 @@ class UpdateCancelledError extends Error {}
  *
  * 3. 入力中に processFrontMatter で書くと、Obsidian が「modified externally, merging changes」を出し、
  *    直前の入力が消えることがある（upstream #87、alangrainger 版 #32・#59。プラグイン側では直せない）
- *    → 入力が止まるまで待つ（DEBOUNCE_DELAY_MS・EDIT_IDLE_DELAY_MS）。実行直前にも条件を再確認する
+ *    → 入力が止まるまで待つ（DEBOUNCE_DELAY_MS と UserInputTracker の idleMs）。実行直前にも条件を再確認する
  *
  * 4. 非フォーカスのウィンドウやポップアウトでの編集、vault 外の仮想ファイルも modify を起こす
  *    → 対象タブ自身の document でフォーカスを確認し、isInvalidFile で vault 外のパスを除外する
@@ -59,9 +60,11 @@ class UpdateCancelledError extends Error {}
 export default class UpdateTimeOnEditPlugin extends Plugin {
   declare settings: UpdateTimeOnEditSettings;
   private readonly DEBOUNCE_DELAY_MS = 3000;
-  private readonly EDIT_IDLE_DELAY_MS = 1500;
-  private readonly USER_INPUT_WINDOW_MS = 10000;
-  private lastUserInputAt = 0;
+  private readonly userInput = new UserInputTracker({
+    windowMs: 10000,
+    idleMs: 1500,
+    shouldRecord: (doc) => this.isInputTarget(doc),
+  });
   // 更新できるのはアクティブなファイルだけなので、予約も常に1件でよい
   // （別のファイルへ移ると、元の予約は実行時の確認で捨てられる）
   private pendingUpdateTimer: number | undefined;
@@ -102,7 +105,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   private setupEventHandlers(): void {
     this.log('Setup handler');
-    this.setupUserInputTracking();
+    this.userInput.start(this);
     this.setupModifyHandler();
     this.setupFileOpenHandler();
     this.setupRenameHandler();
@@ -117,7 +120,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
         }
         // 外部（同期・AIなど）からの編集は、更新日時の対象にせず基準だけを新しい本文に合わせる。
         // 合わせないと、その後のプロパティだけの編集で更新されてしまう。
-        if (!this.hasRecentUserInput()) {
+        if (!this.userInput.hasRecentInput()) {
           void this.baseline.refreshIfTracked(file);
           return;
         }
@@ -182,7 +185,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
     // 開いたまま外部（AIなど）から編集された場合は modify だけが発火するので、
     // 直前にユーザー入力がなければ更新しない
-    if (!this.hasRecentUserInput()) {
+    if (!this.userInput.hasRecentInput()) {
       this.log('no recent user input (external edit?)');
       return false;
     }
@@ -190,40 +193,12 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     return true;
   }
 
-  private hasRecentUserInput(): boolean {
-    return Date.now() - this.lastUserInputAt < this.USER_INPUT_WINDOW_MS;
-  }
-
-  private setupUserInputTracking(): void {
-    // 外部編集と区別するため、modify の直前にユーザー入力があったかを見る（設計メモ参照）。
-    // Obsidian の自動保存は入力の数秒後に走るため、窓は保存遅延より長くする
-    const trackDocument = (doc: Document) => {
-      const markInput = () => {
-        const file = getActiveFile(this.app);
-        if (
-          doc !== this.getActiveViewDocument() || !doc.hasFocus() || !file ||
-          this.isInvalidFile(file)
-        ) {
-          return;
-        }
-        this.lastUserInputAt = Date.now();
-      };
-      this.registerDomEvent(doc, 'beforeinput', markInput, true);
-      this.registerDomEvent(doc, 'keydown', markInput, true);
-    };
-
-    trackDocument(document);
-    // ポップアウトウィンドウは別の document を持つので、開くたびに追加する
-    this.registerEvent(
-      this.app.workspace.on('window-open', (_workspaceWindow, win) => {
-        trackDocument(win.document);
-      }),
+  // 入力として記録してよいのは、フォーカスのあるアクティブなタブの document での入力だけ
+  private isInputTarget(doc: Document): boolean {
+    const file = getActiveFile(this.app);
+    return (
+      doc === this.getActiveViewDocument() && doc.hasFocus() && file !== null && !this.isInvalidFile(file)
     );
-  }
-
-  // 入力が途切れて間もない間は、まだ編集中として書き込みを延期する
-  private isUserTyping(): boolean {
-    return Date.now() - this.lastUserInputAt < this.EDIT_IDLE_DELAY_MS;
   }
 
   private clearPendingUpdate(): void {
@@ -237,7 +212,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.pendingUpdateTimer = window.setTimeout(() => {
       this.pendingUpdateTimer = undefined;
 
-      if (this.isUserTyping()) {
+      if (this.userInput.isTyping()) {
         this.log('EDITING IN PROGRESS, DELAYING UPDATE');
         this.scheduleIdleUpdate(file);
         return;
