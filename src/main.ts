@@ -5,6 +5,7 @@ import {
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
 import { BaselineStore } from './baseline';
+import { isInvalidFile } from './filter';
 import { applyTimestamps, type FrontMatter } from './frontmatter';
 import { UserInputTracker } from './input';
 import {
@@ -115,7 +116,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupModifyHandler(): void {
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
-        if (!(file instanceof TFile) || this.isInvalidFile(file)) {
+        if (!(file instanceof TFile) || isInvalidFile(this.app.vault, file)) {
           return;
         }
         // 外部（同期・AIなど）からの編集は、更新日時の対象にせず基準だけを新しい本文に合わせる。
@@ -136,7 +137,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupFileOpenHandler(): void {
     this.registerEvent(
       this.app.workspace.on('file-open', (file) => {
-        if (file && !this.isInvalidFile(file)) {
+        if (file && !isInvalidFile(this.app.vault, file)) {
           void this.baseline.ensure(file);
         }
       }),
@@ -168,7 +169,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private isValidActiveFile(file: TFile): boolean {
-    if (this.isInvalidFile(file)) {
+    if (isInvalidFile(this.app.vault, file)) {
       this.log('not a vault markdown file');
       return false;
     }
@@ -197,7 +198,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private isInputTarget(doc: Document): boolean {
     const file = getActiveFile(this.app);
     return (
-      doc === this.getActiveViewDocument() && doc.hasFocus() && file !== null && !this.isInvalidFile(file)
+      doc === this.getActiveViewDocument() && doc.hasFocus() && file !== null && !isInvalidFile(this.app.vault, file)
     );
   }
 
@@ -233,7 +234,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
 
   // 読み込みの要らない判定を先に行い、無視するファイルの本文は読まない
   async shouldFileBeIgnored(file: TFile): Promise<boolean> {
-    if (this.isInvalidFile(file) || isExcalidrawFile(file)) {
+    if (isInvalidFile(this.app.vault, file) || isExcalidrawFile(file)) {
       return true;
     }
     if (this.isPathInIgnoredFolder(file.path)) {
@@ -246,40 +247,6 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     }
 
     return this.isFileUnchanged(file, fileContent);
-  }
-
-  private isInvalidFile(file: TFile): boolean {
-    if (!file.path || file.extension !== 'md') {
-      return true;
-    }
-
-    // 外部ファイルも仮想 TFile として vault に登録されることがある。
-    // file: URI・絶対パス・親への参照は vault 相対パスではないため除外する。
-    if (
-      /^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(file.path) ||
-      file.path.split(/[/\\]/).includes('..')
-    ) {
-      return true;
-    }
-    if (
-      file.vault !== this.app.vault ||
-      this.app.vault.getAbstractFileByPath(file.path) !== file
-    ) {
-      return true;
-    }
-
-    // Canvas files are created as 'Canvas.md',
-    // so the plugin will update "frontmatter" and break the file when it gets created
-    if (file.name === 'Canvas.md') {
-      return true;
-    }
-
-    // Temporary files created by Obsidian start with "Untitled"
-    if (file.name.startsWith("Untitled")) {
-      return true;
-    }
-
-    return false;
   }
 
   private async getFileContent(file: TFile): Promise<string | null> {
