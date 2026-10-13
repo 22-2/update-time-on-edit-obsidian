@@ -63,7 +63,11 @@
 
 - 除外判定は、本文を読む前に軽い判定（無効なファイル・Excalidraw・除外フォルダ）を行い、`ignore` の判定オブジェクトを使い回す
 - 非推奨の `workspace.activeLeaf` を `getActiveViewOfType(MarkdownView)` に置き換え、`isFile`・`isTFile` を `instanceof TFile` に統一
-- `src/main.ts` を機能ごとに分割リファクタリング（ガード、フィルタリング、処理、キャッシュ管理）
+- `src/main.ts` から責務ごとにファイルを切り出した（フォルダは作らない）
+  - `frontmatter.ts`：created / updated の書き込み（`applyTimestamps`。Obsidian に依存しない純粋な関数）
+  - `baseline.ts`：本文ハッシュの基準（`BaselineStore`）
+  - `input.ts`：ユーザー入力の追跡（`UserInputTracker`）
+  - `main.ts` には、イベントの配線、対象ファイルの判定、更新の予約と流れだけを残した
 - 日付操作・ユーティリティを `src/utils.ts` に集約
 - **使用していない設定の削除**
   - `enableNumberProperties`（数値プロパティ設定）を削除
@@ -72,7 +76,7 @@
   - `src/suggesters/`（Popper.js を使っていたサジェスト。どこからも import されていなかった）
   - `FileWriteQueue`（上記 1 を参照）
   - 内部だけで使われていた `export` の整理（`onlyUniqueArray`・`hashString`）
-- テストを Jest → **Vitest** に移行（`src/utils.test.ts`、`src/main.test.ts`）
+- テストを Jest → **Vitest** に移行（`src/*.test.ts`）
 - `any` を使っていた箇所（frontmatter・moment・Excalidraw 判定）を実際の型に置き換え
 
 ## ビルド・ツール設定
@@ -95,9 +99,19 @@
 - **最低対応バージョンを Obsidian 1.13.0 に引き上げ**（`manifest.json`）。設定画面は `getSettingDefinitions()` のみで実装し、旧版用の `display()` は削除した
   - `versions.json` は次のリリースで `pnpm version` が追記する（現在の 2.4.0 → 1.4.4 の記録はそのまま）
 
+## テスト
+
+- **単体テスト**（`pnpm test`、Vitest）：`src/*.test.ts`。Obsidian は `test/obsidian.ts` のモックで代用する
+- **E2E**（`pnpm test:e2e`）：`obsidian-e2e-toolkit` で実際の Obsidian を起動して確かめる（`e2e/`）
+  - 入力で更新される／開いただけ・外部編集・外部編集後のプロパティだけの変更では更新されない／除外フォルダ／旧版の設定の移行
+  - 再起動後に復元されたノート、ポップアウトでの入力、フォーカスが外れた時の扱い
+  - 待機は、テストの中でだけプラグインのデバウンスなどを書き換えて短縮している（`e2e/helpers.ts`）
+  - 「更新されない」ことの確認は、Obsidian の自動保存（入力の約2秒後）より長く待たないと見逃す
+  - CI は `.github/workflows/e2e.yml`（Windows・macOS）。ツールキットが Ubuntu の GitHub Actions に対応していないため含めていない
+
 ## lint の状況
 
-- `pnpm lint`: error 0 件、warning 5 件（テストの `TFile` キャストとタイマー、テスト用モックの `globalThis`、`vitest.config.mts` の `node:url`）
+- `pnpm lint`: error 0 件、warning 0 件（テストと `vitest.config.mts` は Obsidian の外で動くため、`window` や `TFile` に関する一部のルールを `eslint.config.mts` で外している）
 
 ## 残タスク・既知事項（`.todo` より）
 

@@ -11,6 +11,13 @@ Here is a list of feature this plugin provides :
 - Ignore folder for the creation property
 - Works on mobile & desktop
 
-This plugin will read the `ctime` and `mtime` from obsidian, and thus, the file system. **If file change from an external source, the header keys will be updated**.
+This plugin will read the `ctime` and `mtime` from obsidian, and thus, the file system. The header keys are updated only when you edit the body of a note in Obsidian. Changes from an external source (sync, other editors, AI tools) and property-only edits do not update them.
 
 Remember to backup your vault since this plugin will modify files.
+
+## Development
+
+- `pnpm build`: type check and bundle `main.js`
+- `pnpm test`: unit tests (Vitest)
+- `pnpm test:e2e`: build, then run E2E tests against a real Obsidian with [obsidian-e2e-toolkit](https://github.com/22-2/obsidian-e2e-toolkit) (Playwright). Run `node node_modules/electron/install.js` once if Electron's binary is missing. If `ELECTRON_RUN_AS_NODE` is set in your shell, `playwright.config.ts` unsets it.
+- `pnpm lint`
