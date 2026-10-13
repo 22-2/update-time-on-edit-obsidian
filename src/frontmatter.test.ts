@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyTimestamps, type FrontMatter, type TimestampOptions } from './frontmatter';
+import { applyTimestamps, isCursorInFrontmatter, type FrontMatter, type TimestampOptions } from './frontmatter';
 
 // Obsidian の moment の代わりに、使う範囲だけ Date で実装する
 interface FakeMoment {
@@ -94,5 +94,40 @@ describe('applyTimestamps', () => {
       { ...OPTIONS, headerCreated: 'c', headerUpdated: 'u' },
     );
     expect(Object.keys(frontmatter).sort()).toEqual(['c', 'u']);
+  });
+});
+
+describe('isCursorInFrontmatter', () => {
+  // 行と桁から、先頭からの文字数に直すだけの簡易なエディター
+  function editorAt(text: string, line: number, ch = 0) {
+    const lines = text.split('\n');
+    return {
+      getValue: () => text,
+      getCursor: () => ({ line, ch }),
+      posToOffset: (pos: { line: number; ch: number }) =>
+        lines.slice(0, pos.line).reduce((sum, row) => sum + row.length + 1, 0) + pos.ch,
+    };
+  }
+  const TEXT = '---\na: 1\n---\nbody\nmore';
+
+  it('フロントマターの中（開きの行から閉じの行まで）なら true', () => {
+    expect(isCursorInFrontmatter(editorAt(TEXT, 0))).toBe(true);
+    expect(isCursorInFrontmatter(editorAt(TEXT, 1, 2))).toBe(true);
+    expect(isCursorInFrontmatter(editorAt(TEXT, 2, 3))).toBe(true);
+  });
+
+  it('本文の先頭以降なら false', () => {
+    expect(isCursorInFrontmatter(editorAt(TEXT, 3))).toBe(false);
+    expect(isCursorInFrontmatter(editorAt(TEXT, 4, 2))).toBe(false);
+  });
+
+  it('フロントマターが無い、または閉じていなければ false', () => {
+    expect(isCursorInFrontmatter(editorAt('body\nmore', 0))).toBe(false);
+    expect(isCursorInFrontmatter(editorAt('---\na: 1\nbody', 1))).toBe(false);
+  });
+
+  it('水平線（----）や ---foo はフロントマターの区切りと見なさない', () => {
+    expect(isCursorInFrontmatter(editorAt('----\na: 1\n---\nbody', 1))).toBe(false);
+    expect(isCursorInFrontmatter(editorAt('---foo\na: 1\n---\nbody', 1))).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import { getFrontMatterInfo, type Editor } from 'obsidian';
 import { formatDate, parseDate, shouldUpdateValue, type DateValue } from './utils';
 
 export type FrontMatter = Record<string, unknown>;
@@ -48,4 +49,13 @@ export function applyTimestamps(
 
   frontmatter[options.headerUpdated] = formatDate(mTime, options.dateFormat);
   return 'updated';
+}
+
+/**
+ * カーソルがフロントマター（閉じの --- の行まで）の中にあるか。
+ * metadataCache の位置は入力中に古い値を返し得るため、エディターの今の内容から判定する。
+ */
+export function isCursorInFrontmatter(editor: Pick<Editor, 'getValue' | 'getCursor' | 'posToOffset'>): boolean {
+  const { exists, contentStart } = getFrontMatterInfo(editor.getValue());
+  return exists && editor.posToOffset(editor.getCursor()) < contentStart;
 }
