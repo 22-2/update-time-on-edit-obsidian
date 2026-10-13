@@ -4,16 +4,13 @@ import {
   type UpdateTimeOnEditSettings,
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
+import { applyTimestamps, type FrontMatter } from './frontmatter';
 import {
-  formatDate,
   getActiveFile,
   hashBody,
   isExcalidrawFile,
   isPathIgnored,
   normalizeIgnoreFolders,
-  parseDate,
-  shouldUpdateValue,
-  type DateValue,
 } from './utils';
 
 interface FileChangeResult {
@@ -21,19 +18,9 @@ interface FileChangeResult {
   error?: unknown;
 }
 
-type FrontMatter = Record<string, unknown>;
-
 // 旧版が data.json に保存していた項目。ハッシュは今はメモリにだけ持ち、照合は常に有効なので、読み込み時に捨てる
 const LEGACY_KEYS = ['fileHashMap', 'enableExperimentalHash'] as const;
 type LoadedData = Partial<UpdateTimeOnEditSettings> & Partial<Record<(typeof LEGACY_KEYS)[number], unknown>>;
-
-// frontmatter の値のうち、日付として解釈できる型だけを取り出す
-function toDateValue(value: unknown): DateValue | undefined {
-  if (value instanceof Date || typeof value === 'string' || typeof value === 'number') {
-    return value;
-  }
-  return undefined;
-}
 
 class UpdateCancelledError extends Error {}
 
@@ -446,61 +433,14 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
     this.log('current metadata: ', frontmatter);
     this.log('current stat: ', file.stat);
 
-    const { mTime, cTime } = this.parseFileTimes(file);
-    if (!mTime || !cTime) {
-      this.log('Something wrong happen, skipping');
-      return;
-    }
-
-    this.updateCreatedField(frontmatter, file.path, cTime);
-    this.updateModifiedField(frontmatter, mTime);
-  }
-
-  private parseFileTimes(file: TFile) {
-    return {
-      mTime: parseDate(file.stat.mtime, this.settings.dateFormat),
-      cTime: parseDate(file.stat.ctime, this.settings.dateFormat),
-    };
-  }
-
-  private updateCreatedField(frontmatter: FrontMatter, filePath: string, cTime: Date): void {
-    const createdKey = this.settings.headerCreated;
-
-    if (!frontmatter[createdKey] && !this.shouldIgnoreCreated(filePath)) {
-      frontmatter[createdKey] = formatDate(
-        cTime,
-        this.settings.dateFormat,
-      );
-    }
-  }
-
-  private updateModifiedField(frontmatter: FrontMatter, mTime: Date): void {
-    const updatedKey = this.settings.headerUpdated;
-    const currentMTimeOnFile = parseDate(
-      toDateValue(frontmatter[updatedKey]),
-      this.settings.dateFormat,
-    );
-
-    // 値が無い・日付として読めない場合は、期限切れと同じく書き込む
-    const isUpToDate =
-      frontmatter[updatedKey] &&
-      currentMTimeOnFile &&
-      !this.shouldUpdateModifiedTime(mTime, currentMTimeOnFile);
-    if (isUpToDate) {
-      this.log('Skipping updateKey');
-      return;
-    }
-
-    this.log('Update updatedKey');
-    frontmatter[updatedKey] = formatDate(mTime, this.settings.dateFormat);
-  }
-
-  private shouldUpdateModifiedTime(mTime: Date, currentMTime: Date): boolean {
-    return shouldUpdateValue(
-      mTime,
-      currentMTime,
-      this.settings.minMinutesBetweenSaves,
-    );
+    const result = applyTimestamps(frontmatter, file.stat, {
+      dateFormat: this.settings.dateFormat,
+      headerCreated: this.settings.headerCreated,
+      headerUpdated: this.settings.headerUpdated,
+      minMinutesBetweenSaves: this.settings.minMinutesBetweenSaves,
+      addCreated: !this.shouldIgnoreCreated(file.path),
+    });
+    this.log('timestamps:', result);
   }
 
   private handleProcessingError(error: unknown, file: TFile): FileChangeResult {
