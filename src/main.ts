@@ -4,10 +4,10 @@ import {
   type UpdateTimeOnEditSettings,
   UpdateTimeOnEditSettingsTab,
 } from './Settings';
+import { BaselineStore } from './baseline';
 import { applyTimestamps, type FrontMatter } from './frontmatter';
 import {
   getActiveFile,
-  hashBody,
   isExcalidrawFile,
   isPathIgnored,
   normalizeIgnoreFolders,
@@ -65,9 +65,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   // 更新できるのはアクティブなファイルだけなので、予約も常に1件でよい
   // （別のファイルへ移ると、元の予約は実行時の確認で捨てられる）
   private pendingUpdateTimer: number | undefined;
-  // パス → 本文のハッシュ。「この端末のユーザーが書いたものではない、最後に確認した本文」を表す。
-  // 起動をまたいで残す必要が無く、保存すると同期の競合の原因になるため、メモリにだけ持つ。
-  private readonly baselineHashes = new Map<string, string>();
+  private readonly baseline = new BaselineStore<TFile>((file) => this.getFileContent(file));
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -120,7 +118,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
         // 外部（同期・AIなど）からの編集は、更新日時の対象にせず基準だけを新しい本文に合わせる。
         // 合わせないと、その後のプロパティだけの編集で更新されてしまう。
         if (!this.hasRecentUserInput()) {
-          void this.refreshBaselineIfTracked(file);
+          void this.baseline.refreshIfTracked(file);
           return;
         }
         if (!this.isValidActiveFile(file)) {
@@ -135,34 +133,17 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupFileOpenHandler(): void {
     this.registerEvent(
       this.app.workspace.on('file-open', (file) => {
-        if (file) {
-          void this.ensureBaseline(file);
+        if (file && !this.isInvalidFile(file)) {
+          void this.baseline.ensure(file);
         }
       }),
     );
   }
 
-  /**
-   * 基準が無いファイルは、開いた時点の内容を基準として記録する。
-   * 記録が無いと、未編集でも最初の保存で必ず更新対象になってしまうため。
-   */
-  private async ensureBaseline(file: TFile): Promise<void> {
-    if (this.isInvalidFile(file) || this.baselineHashes.has(file.path)) {
-      return;
-    }
-    await this.recordBaseline(file);
-  }
-
-  private async refreshBaselineIfTracked(file: TFile): Promise<void> {
-    if (this.baselineHashes.has(file.path)) {
-      await this.recordBaseline(file);
-    }
-  }
-
   private setupRenameHandler(): void {
     this.registerEvent(
       this.app.vault.on('rename', (file, oldPath) => {
-        this.moveBaseline(oldPath, file.path);
+        this.baseline.move(oldPath, file.path);
       }),
     );
   }
@@ -170,7 +151,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   private setupDeleteHandler(): void {
     this.registerEvent(
       this.app.vault.on('delete', (file) => {
-        this.baselineHashes.delete(file.path);
+        this.baseline.delete(file.path);
       }),
     );
   }
@@ -336,17 +317,11 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
   }
 
   private isFileUnchanged(file: TFile, fileContent: string): boolean {
-    const baselineHash = this.baselineHashes.get(file.path);
-    if (!baselineHash) {
-      return false;
-    }
-
-    if (hashBody(fileContent) === baselineHash) {
+    const unchanged = this.baseline.isUnchanged(file, fileContent);
+    if (unchanged) {
       this.log('Ignoring file because, sha same');
-      return true;
     }
-
-    return false;
+    return unchanged;
   }
 
   private isPathInIgnoredFolder(path: string): boolean {
@@ -374,7 +349,7 @@ export default class UpdateTimeOnEditPlugin extends Plugin {
       if (!(await this.updateFileFrontmatter(file))) {
         return { status: 'ignored' };
       }
-      await this.recordBaseline(file);
+      await this.baseline.record(file);
       return { status: 'ok' };
     } catch (e: unknown) {
       if (e instanceof UpdateCancelledError) {
@@ -453,28 +428,6 @@ ${error.message}`;
       console.error(errorMessage);
     }
     return { status: 'error', error };
-  }
-
-  // ==================== Baseline Management ====================
-
-  private async recordBaseline(file: TFile): Promise<void> {
-    const fileContent = await this.getFileContent(file);
-    if (!fileContent) {
-      return;
-    }
-
-    this.baselineHashes.set(file.path, hashBody(fileContent));
-  }
-
-  // フォルダの改名では子ファイルの基準が残らないが、次に開いた時に作り直されるので問題ない
-  private moveBaseline(oldPath: string, newPath: string): void {
-    const hash = this.baselineHashes.get(oldPath);
-    if (!hash) {
-      return;
-    }
-
-    this.baselineHashes.set(newPath, hash);
-    this.baselineHashes.delete(oldPath);
   }
 
   // ==================== Utilities ====================
