@@ -1,10 +1,10 @@
 {
 	"id": "update-time-on-edit",
-	"name": "Update time on edit (Nicolas Beaussart, 22-2)",
+	"name": "Update time on edit",
 	"version": "2.6.0",
 	"minAppVersion": "1.13.0",
 	"description": "Keep front matter in sync with the last edit time",
-	"author": "@beaussan",
+	"author": "Nicolas Beaussart, 22-2",
 	"authorUrl": "https://github.com/beaussan",
 	"isDesktopOnly": false
 }
